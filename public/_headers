@@ -1,0 +1,2 @@
+/*
+  Permissions-Policy: xr-spatial-tracking=(self), microphone=(self)

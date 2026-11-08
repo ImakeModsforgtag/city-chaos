@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>CITY CHAOS</title>
+  <meta name="description" content="CITY CHAOS - multiplayer low-poly VR shooter for Meta Quest 3 and desktop browsers." />
+  <meta name="theme-color" content="#ff3d7f" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💥</text></svg>" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <script type="importmap">
+    { "imports": { "three": "/vendor/three/three.module.min.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- ============================ LOADING ============================ -->
+  <div id="loading" class="screen show">
+    <div class="logo">CITY<span>CHAOS</span></div>
+    <div class="loadbar"><div id="loadfill"></div></div>
+    <p id="loadtext">Building the city...</p>
+  </div>
+
+  <!-- ============================ MAIN MENU ============================ -->
+  <div id="menu" class="overlay hidden">
+    <div id="screen-main" class="screen panel">
+      <div class="logo">CITY<span>CHAOS</span></div>
+      <p class="tag">Swing. Climb. Blast your friends.</p>
+      <label class="namebox">Your name <input id="name-input" maxlength="16" placeholder="Player" /></label>
+      <div class="rolepick"><span>I want to be a</span><div class="seg role-seg"><button data-val="civilian">🧑 CIVILIAN</button><button data-val="cop">👮 COP</button></div></div>
+      <div class="btns">
+        <button class="big b-green" data-action="play">▶ PLAY</button>
+        <button class="big b-blue" data-goto="join">👥 JOIN FRIEND</button>
+        <button class="big b-orange" data-goto="create">🏠 CREATE ROOM</button>
+        <div class="row">
+          <button class="b-pink" data-goto="custom">🎨 CUSTOMIZE</button>
+          <button class="b-purple" data-goto="settings">⚙ SETTINGS</button>
+        </div>
+        <button class="b-yellow" data-goto="howto">❓ HOW TO PLAY</button>
+      </div>
+      <p id="net-status" class="netstatus">Connecting...</p>
+    </div>
+
+    <div id="screen-join" class="screen panel hidden">
+      <h2>JOIN FRIEND</h2>
+      <label class="namebox">Your name <input id="join-name" maxlength="16" placeholder="Player" /></label>
+      <p>Type the 6-character room code your friend sees on their screen.</p>
+      <input id="code-input" class="code-input" maxlength="6" placeholder="ABC123" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+      <div class="keypad" id="keypad"></div>
+      <p id="join-error" class="error"></p>
+      <div class="btns">
+        <button class="big b-green" data-action="join">JOIN ROOM</button>
+        <button class="b-gray" data-goto="main">◀ BACK</button>
+      </div>
+    </div>
+
+    <div id="screen-create" class="screen panel hidden">
+      <h2>CREATE ROOM</h2>
+      <div class="opt"><span>Game mode</span>
+        <div class="seg" id="create-mode">
+          <button data-val="ffa" class="on">Free For All</button><button data-val="tdm">Team Deathmatch</button>
+        </div>
+      </div>
+      <div class="opt"><span>Kill limit</span>
+        <div class="seg" id="create-kills"><button data-val="10">10</button><button data-val="25" class="on">25</button><button data-val="50">50</button></div>
+      </div>
+      <div class="opt"><span>Time limit</span>
+        <div class="seg" id="create-time"><button data-val="300">5 min</button><button data-val="600" class="on">10 min</button><button data-val="1200">20 min</button></div>
+      </div>
+      <p class="hint">Rooms are private: only people with your code can join. Up to 8 players.</p>
+      <div class="btns">
+        <button class="big b-orange" data-action="create">CREATE ROOM</button>
+        <button class="b-gray" data-goto="main">◀ BACK</button>
+      </div>
+    </div>
+
+    <div id="screen-lobby" class="screen panel wide hidden">
+      <div class="lobby-top">
+        <div>
+          <div class="small">ROOM CODE</div>
+          <div id="lobby-code" class="bigcode">------</div>
+          <button class="b-blue" data-action="copy">📋 COPY INVITE LINK</button>
+          <p id="copy-msg" class="hint"></p>
+        </div>
+        <div class="lobby-info">
+          <div id="lobby-mode" class="pill">Free For All</div>
+          <div id="lobby-limits" class="small"></div>
+          <div id="host-settings" class="hidden">
+            <div class="seg" id="lobby-mode-seg"><button data-val="ffa">FFA</button><button data-val="tdm">TDM</button></div>
+          </div>
+        </div>
+      </div>
+      <h3>Players <span id="lobby-count">1/8</span></h3>
+      <ul id="lobby-players" class="plist"></ul>
+      <div class="rolepick"><span>I want to be a</span><div class="seg role-seg"><button data-val="civilian">🧑 CIVILIAN</button><button data-val="cop">👮 COP</button></div></div>
+      <p id="role-hint" class="hint"></p>
+      <div class="btns">
+        <button id="btn-vr" class="big b-pink" data-action="vr">🥽 ENTER VR</button>
+        <button class="big b-green" data-action="desktop">🖱 PLAY ON DESKTOP</button>
+        <div class="row">
+          <button id="btn-team" class="b-purple hidden" data-action="team">🔁 SWITCH TEAM</button>
+          <button id="btn-mic" class="b-yellow" data-action="mic">🎤 MIC: OFF</button>
+          <button class="b-gray" data-action="leave">🚪 LEAVE</button>
+        </div>
+      </div>
+      <p id="vr-note" class="hint"></p>
+    </div>
+
+    <div id="screen-custom" class="screen panel wide hidden">
+      <h2>CUSTOMIZE</h2>
+      <div class="custom-grid">
+        <div class="preview-wrap"><canvas id="preview"></canvas></div>
+        <div class="custom-controls">
+          <div class="opt col"><span>Body color</span>
+            <div class="wheelrow"><canvas id="wheel" width="180" height="180"></canvas>
+              <div class="wheelside"><input type="range" id="bright" min="20" max="100" value="100" /><div id="swatches" class="swatches"></div></div>
+            </div>
+          </div>
+          <div class="opt"><span>Accent</span><div id="accent-swatches" class="swatches"></div></div>
+          <div class="cycler" data-key="head"><span>Head</span><button>◀</button><b></b><button>▶</button></div>
+          <div class="cycler" data-key="body"><span>Body</span><button>◀</button><b></b><button>▶</button></div>
+          <div class="cycler" data-key="hat"><span>Hat</span><button>◀</button><b></b><button>▶</button></div>
+          <div class="cycler" data-key="glasses"><span>Glasses</span><button>◀</button><b></b><button>▶</button></div>
+          <div class="cycler" data-key="back"><span>Back</span><button>◀</button><b></b><button>▶</button></div>
+        </div>
+      </div>
+      <div class="btns row"><button class="b-gray" data-action="randomize">🎲 RANDOM</button><button class="big b-green" data-goto="back">✔ DONE</button></div>
+    </div>
+
+    <div id="screen-settings" class="screen panel wide hidden">
+      <h2>SETTINGS</h2>
+      <div class="settings-grid">
+        <div class="opt"><span>VR movement</span><div class="seg" data-setting="moveMode"><button data-val="gorilla">Gorilla arms</button><button data-val="both">Arms + stick</button><button data-val="joystick">Joystick</button></div></div>
+        <div class="opt"><span>VR body size</span><div class="seg" data-setting="vrSize"><button data-val="gorilla">Gorilla (like Gorilla Tag)</button><button data-val="small">Small</button><button data-val="human">Human</button></div></div>
+        <div class="opt"><span>VR turning</span><div class="seg" data-setting="turnMode"><button data-val="snap">Snap</button><button data-val="smooth">Smooth</button><button data-val="off">Off</button></div></div>
+        <div class="opt"><span>Snap angle</span><div class="seg" data-setting="snapAngle"><button data-val="30">30°</button><button data-val="45">45°</button><button data-val="60">60°</button></div></div>
+        <div class="opt"><span>Comfort vignette</span><div class="seg" data-setting="vignette"><button data-val="true">On</button><button data-val="false">Off</button></div></div>
+        <div class="opt"><span>Arm strength</span><input type="range" data-setting="armBoost" min="0.8" max="1.6" step="0.05" /></div>
+        <div class="opt"><span>Mouse sensitivity</span><input type="range" data-setting="mouseSens" min="0.3" max="3" step="0.05" /></div>
+        <div class="opt"><span>Field of view</span><input type="range" data-setting="fov" min="60" max="110" step="1" /></div>
+        <div class="opt"><span>Master volume</span><input type="range" data-setting="volMaster" min="0" max="1" step="0.05" /></div>
+        <div class="opt"><span>Music</span><input type="range" data-setting="volMusic" min="0" max="1" step="0.05" /></div>
+        <div class="opt"><span>Effects</span><input type="range" data-setting="volSfx" min="0" max="1" step="0.05" /></div>
+        <div class="opt"><span>Voice chat volume</span><input type="range" data-setting="volVoice" min="0" max="1.5" step="0.05" /></div>
+        <div class="opt"><span>Shadows <small>(VR: Pretty only)</small></span><div class="seg" data-setting="shadows"><button data-val="true">On</button><button data-val="false">Off</button></div></div>
+        <div class="opt"><span>Graphics</span><div class="seg" data-setting="quality"><button data-val="low">Fast</button><button data-val="med">Balanced</button><button data-val="high">Pretty</button></div></div>
+        <div class="opt"><span>Show FPS</span><div class="seg" data-setting="showFps"><button data-val="true">On</button><button data-val="false">Off</button></div></div>
+      </div>
+      <div class="btns"><button class="big b-green" data-goto="back">✔ DONE</button></div>
+    </div>
+
+    <div id="screen-howto" class="screen panel wide hidden">
+      <h2>HOW TO PLAY</h2>
+      <div class="howto">
+        <div>
+          <h3>🥽 Meta Quest (VR)</h3>
+          <ul>
+            <li><b>Move like a gorilla:</b> put your hands on the ground and push. Swing your arms back to run, push down hard to jump.</li>
+            <li><b>Climb:</b> slap walls and pull yourself up. Push off walls to wall-jump onto rooftops.</li>
+            <li><b>Grip (either hand):</b> grab a weapon or pickup near your hand.</li>
+            <li><b>Right trigger:</b> shoot. <b>A:</b> reload. <b>B:</b> switch weapon.</li>
+            <li><b>X:</b> jump boost. <b>Y:</b> menu. <b>Left stick click:</b> scoreboard.</li>
+            <li><b>Right stick:</b> turn. <b>Left stick:</b> walk (if enabled in Settings).</li>
+          </ul>
+        </div>
+        <div>
+          <h3>🖱 Desktop</h3>
+          <ul>
+            <li><b>WASD</b> move, <b>Shift</b> sprint, <b>Mouse</b> look</li>
+            <li><b>Left click</b> shoot, <b>R</b> reload, <b>E</b> pick up</li>
+            <li><b>Space</b> jump (hold it against a ledge to climb up)</li>
+            <li><b>1 2 3 / wheel / Q</b> switch weapon</li>
+            <li><b>Tab</b> scoreboard, <b>Esc</b> pause menu</li>
+            <li>Walk into a <b>ladder</b> to climb it.</li>
+          </ul>
+          <h3>👮 Cop or 🧑 Civilian</h3>
+          <ul>
+            <li><b>Civilians</b> can rob stores and steal cars. Crimes make you <b>wanted</b> and the police come for you: in a police car with the siren on, or straight out of the donut shop.</li>
+            <li><b>Cops</b> spawn at the police station and can drive the police cars (<b>L</b> or <b>X</b> in VR: siren). Stores can't be robbed while a cop is close by.</li>
+            <li>Walk up to a wanted player and press <b>E</b> (or <b>grip</b> them in VR) to <b>arrest</b> them for a double bounty. Shooting innocent people costs cops $100.</li>
+          </ul>
+          <h3>🏆 Rules</h3>
+          <ul>
+            <li>Everyone has 100 health. Headshots hurt a lot more.</li>
+            <li>Eliminated players respawn after 5 seconds.</li>
+            <li>Pistols hide in shops, shotguns at the police station, snipers on rooftops, rockets in red crates.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="btns"><button class="big b-green" data-goto="main">✔ GOT IT</button></div>
+    </div>
+  </div>
+
+  <!-- ============================ DESKTOP HUD ============================ -->
+  <div id="hud" class="hidden">
+    <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+    <div id="hitmarker">✕</div>
+    <div id="topbar"><span id="timer">10:00</span><span id="teamscore" class="hidden"><b class="red">0</b> : <b class="blue">0</b></span><span id="myscore"></span><span id="cash">$0</span><span id="wanted"></span></div>
+    <div id="robbar" class="hidden"><div id="robtext">ROBBING...</div><div class="rb"><div id="robfill"></div></div></div>
+    <div id="killfeed"></div>
+    <div id="healthbox"><div class="hlabel">❤</div><div class="hbar"><div id="hfill"></div></div><div id="htext">100</div></div>
+    <div id="ammobox"><div id="wname">Pistol</div><div id="ammo"><b id="mag">12</b> / <span id="reserve">48</span></div><div id="reloadbar"><div></div></div></div>
+    <div id="slots"></div>
+    <div id="prompt" class="hidden"></div>
+    <div id="dmgflash"></div>
+    <div id="dmgdirs"></div>
+    <div id="notice" class="hidden"></div>
+    <div id="death" class="hidden"><div class="dt">ELIMINATED</div><div id="death-by"></div><div id="death-timer">Respawning in 5</div></div>
+    <div id="matchend" class="hidden"></div>
+    <div id="scoreboard" class="hidden"></div>
+    <div id="fps" class="hidden"></div>
+    <div id="clicktoplay" class="hidden">Click to play</div>
+  </div>
+
+  <div id="pause" class="overlay hidden">
+    <div class="panel screen">
+      <h2>PAUSED</h2>
+      <div class="small">ROOM <b id="pause-code"></b></div>
+      <div class="rolepick"><span>I want to be a</span><div class="seg role-seg"><button data-val="civilian">🧑 CIVILIAN</button><button data-val="cop">👮 COP</button></div></div>
+      <div class="btns">
+        <button class="big b-green" data-action="resume">▶ RESUME</button>
+        <button class="b-blue" data-action="copy">📋 COPY INVITE LINK</button>
+        <button class="b-purple" data-action="pause-settings">⚙ SETTINGS</button>
+        <button class="b-pink" data-action="pause-custom">🎨 CUSTOMIZE</button>
+        <button class="b-gray" data-action="leave">🚪 LEAVE ROOM</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden"></div>
+  <script src="/config.js"></script>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

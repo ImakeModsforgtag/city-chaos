@@ -1,0 +1,12 @@
+# One-click deploy config for Render.com (Blueprint). Render reads this automatically.
+services:
+  - type: web
+    name: city-chaos
+    runtime: node
+    plan: free            # change to "starter" to keep the server awake 24/7
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"

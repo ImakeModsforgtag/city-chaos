@@ -1,0 +1,20 @@
+{
+  "name": "city-chaos",
+  "version": "1.0.0",
+  "description": "CITY CHAOS: browser-based multiplayer low-poly VR shooter (Three.js + WebXR + Node.js WebSockets)",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node test/server-test.mjs && node test/server-test-2.mjs && node test/server-test-3.mjs && node test/server-test-4.mjs && node test/server-test-5.mjs"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^4.22.3",
+    "ws": "^8.22.1"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "private": true
+}
