@@ -134,7 +134,7 @@ export class VehicleManager {
     };
     for (const o of this.cars) if (o !== car && check(o.x, o.z, 8.5, 2.4)) return 'car';
     for (const p of this.room.players.values()) {
-      if (!p.alive || !p.pose || p.inCar || p.pose.h[1] > car.y + 3.5) continue;
+      if (!p.alive || !p.pose || p.inCar || p.ride || p.pose.h[1] > car.y + 3.5) continue;
       if (check(p.pose.h[0], p.pose.h[2], 9, 2.2)) return 'player';
       // someone walking up to the car (e.g. to the driver's door): the driver freezes
       if (Math.hypot(p.pose.h[0] - car.x, p.pose.h[2] - car.z) < 4.2) return 'near';
@@ -146,12 +146,18 @@ export class VehicleManager {
   // ---------------------------------------------------------------- hijacking + driving
   onHijack(p, id) {
     const car = this.cars.find(c => c.id === id);
-    if (!car || !p.alive || !p.pose || p.inCar) return;
-    if (car.van && !(p.jail && p.jail.items.has('VANKEYS'))) return this.room.sendTo(p, { type: 'pMsg', text: 'The prison van is locked. You need the 🔑 VAN KEYS.' });
+    if (!car || !p.alive || !p.pose || p.inCar || p.ride) return;
+    if (car.van && car.driver !== DRIVER.PLAYER && !(p.jail && p.jail.items.has('VANKEYS'))) return this.room.sendTo(p, { type: 'pMsg', text: 'The prison van is locked. You need the 🔑 VAN KEYS.' }); // (friends can still hop in once it's moving)
     if (p.holding || (p.jail && !car.van)) return;
-    if (car.driver === DRIVER.PLAYER) return;
     const [hx, hy, hz] = p.pose.h;
     if (Math.hypot(hx - car.x, hz - car.z) > HIJACK_RANGE || Math.abs(hy - car.y) > 3.5) return;
+    if (car.driver === DRIVER.PLAYER) {
+      // getaway ride: hop into a free seat of a car your teammate is driving (civilians with civilians, cops with cops)
+      const d = this.room.players.get(car.pid);
+      if (!d || car.pid === p.id) return;
+      if ((d.role || 'civilian') !== (p.role || 'civilian')) return this.room.sendTo(p, { type: 'pMsg', text: p.role === 'cop' ? 'That\'s a civilian\'s car. Arrest them instead!' : 'You can\'t ride with a cop!' });
+      return this.addRider(p, car);
+    }
     const t = this.room.now();
     if (car.police && p.role !== 'cop') {
       this.room.npcs.addWanted(p, 2, 'stole a police car');
@@ -172,6 +178,7 @@ export class VehicleManager {
   }
 
   onExit(p) {
+    if (p.ride && !p.inCar) return this.removeRider(p);
     const car = this.cars.find(c => c.id === p.inCar);
     p.inCar = 0;
     if (!car) return;
@@ -179,7 +186,28 @@ export class VehicleManager {
     this.room.broadcast({ type: 'carExit', id: car.id, pid: p.id });
   }
 
-  playerGone(p) { if (p.inCar) this.onExit(p); }
+  playerGone(p) { if (p.inCar) this.onExit(p); if (p.ride) this.removeRider(p); }
+
+  // ---------------------------------------------------------------- passengers (getaway rides)
+  riders(car) { return car.riders || (car.riders = new Map()); }
+  addRider(p, car) {
+    const r = this.riders(car), used = new Set(r.values());
+    const seat = [0, 1, 2].find(s => !used.has(s));
+    if (seat === undefined) return this.room.sendTo(p, { type: 'pMsg', text: 'The car is full (3 passengers max).' });
+    r.set(p.id, seat);
+    p.ride = { car: car.id, seat };
+    this.room.broadcast({ type: 'carRide', id: car.id, pid: p.id, seat, on: true });
+  }
+  removeRider(p) {
+    const car = this.cars.find(c => p.ride && c.id === p.ride.car);
+    const seat = p.ride ? p.ride.seat : 0;
+    p.ride = null;
+    if (car) this.riders(car).delete(p.id);
+    this.room.broadcast({ type: 'carRide', id: car ? car.id : 0, pid: p.id, seat, on: false });
+  }
+  ejectRiders(car) {
+    for (const pid of [...this.riders(car).keys()]) { const q = this.room.players.get(pid); if (q) this.removeRider(q); else this.riders(car).delete(pid); }
+  }
 
   // driver's client reports the car each state update: [id, x, y, z, yaw, speed]
   onCarState(p, c) {
@@ -212,7 +240,7 @@ export class VehicleManager {
     };
     const dmg = Math.min(110, Math.round(sp * 5));
     for (const q of this.room.players.values()) {
-      if (q === driver || !q.alive || !q.pose || q.inCar) continue;
+      if (q === driver || !q.alive || !q.pose || q.inCar || q.ride) continue;
       if ((car.hits.get('p' + q.id) || 0) > t) continue;
       if (inside(q.pose.h[0], q.pose.h[1] - 0.8, q.pose.h[2])) {
         car.hits.set('p' + q.id, t + 1);
@@ -276,8 +304,9 @@ export class VehicleManager {
       this.placeOnLoop(car);
     }
   }
-  sendHome(car) { const [hx, hy, hz, hyaw] = car.home; Object.assign(car, { x: hx, y: hy, z: hz, yaw: hyaw, speed: 0, siren: false, driver: DRIVER.NONE, pid: 0 }); }
-  cleanup() { this.cars = this.cars.filter(c => !c.remove); }
+  sendHome(car) { this.ejectRiders(car); this.sendHomeRaw(car); }
+  sendHomeRaw(car) { const [hx, hy, hz, hyaw] = car.home; Object.assign(car, { x: hx, y: hy, z: hz, yaw: hyaw, speed: 0, siren: false, driver: DRIVER.NONE, pid: 0 }); }
+  cleanup() { for (const c of this.cars) if (c.remove) this.ejectRiders(c); this.cars = this.cars.filter(c => !c.remove); }
   loopYaw(car) { const loop = this.loops[car.loop]; const seg = loop.segs.find(g => car.s >= g.start && car.s < g.start + g.len) || loop.segs[0]; return Math.atan2(-(seg.b[0] - seg.a[0]), -(seg.b[1] - seg.a[1])); }
 
   carArr(c) { return [c.id, r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.speed), c.driver, c.pid || 0, c.color, c.police ? 1 : 0, c.siren ? 1 : 0]; }

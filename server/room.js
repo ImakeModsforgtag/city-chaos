@@ -132,7 +132,7 @@ export class Room {
       players: [...this.players.values()].map(q => this.publicPlayer(q)),
       pickups: this.pickups.map(k => [k.id, k.avail ? 1 : 0]),
       teamScores: this.teamScores, match: this.matchInfo(), st: now(),
-      spawn: p.spawnPoint, life: p.life, inv: this.invPayload(p), npcs: this.npcs.snapshot(), cars: this.vehicles.snapshot(), inCar: p.inCar || 0,
+      spawn: p.spawnPoint, life: p.life, inv: this.invPayload(p), npcs: this.npcs.snapshot(), cars: this.vehicles.snapshot(), inCar: p.inCar || 0, ride: p.ride || null,
       jail: this.prison.meState(p), prison: this.prison.stateMsg(), holding: p.holding ? 1 : 0
     };
   }
@@ -423,7 +423,7 @@ export class Room {
 
   kill(victim, killer, w, head, silent = false) {
     if (!victim.alive) return;
-    if (victim.inCar) this.vehicles.playerGone(victim);
+    this.vehicles.playerGone(victim);
     victim.alive = false; victim.hp = 0;
     victim.respawnAt = now() + (silent ? 0.5 : RESPAWN_TIME);
     victim.reloadingUntil = 0;
@@ -511,7 +511,7 @@ export class Room {
   }
 
   spawn(p) {
-    if (p.inCar) this.vehicles.playerGone(p);
+    this.vehicles.playerGone(p);
     if (p.jail && p.jail.state === 'in') {
       // prisoners wake up back in their cell, still without weapons
       const b = this.prison.bedSpawn(p);
@@ -567,7 +567,7 @@ export class Room {
     for (const q of this.players.values()) { q.kills = 0; q.deaths = 0; q.headshots = 0; q.cash = 0; q.wanted = 0; q.robs = 0; }
     this.npcs.reset();
     this.prison.reset();
-    for (const q of this.players.values()) { q.inCar = 0; q.jail = null; q.holding = null; q.savedInv = null; }
+    for (const q of this.players.values()) { q.inCar = 0; q.ride = null; q.jail = null; q.holding = null; q.savedInv = null; }
     this.vehicles.reset();
     this.pickups.forEach(k => { k.avail = true; k.respawnAt = 0; });
     this.rockets = [];

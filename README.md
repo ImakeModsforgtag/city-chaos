@@ -231,6 +231,13 @@ Crimes against players and "destruction" only count when somebody sees it (a ped
 - **Drive (VR):** you sit in the driver seat. Right trigger gas, left trigger brake/reverse, left stick steer, A honk, B get out.
 - Running people over hurts them (and NPCs). Abandoned cars stay parked, then rejoin traffic after a while.
 
+**Getaway rides (passengers)**
+- When a friend is driving, walk up to their car and press **E** (desktop) or **grab it with grip** (VR) to **hop in** as a passenger. Up to 3 passengers (front seat + 2 back seats).
+- Civilians ride with civilians and cops ride with cops (a cop can't jump into a robber's getaway car).
+- Passengers can look around and **shoot from the car** while the driver drives. Get out with **E** (desktop) or **B** (VR).
+- If the driver gets out, passengers stay in their seats until they get out or someone drives again.
+- In prison, friends can ride along in the stolen prison van and **escape together**.
+
 ---
 
 ## 8b. Prison: arrest cutscene and escaping
@@ -319,6 +326,7 @@ city-chaos/
 ## 11. What was tested, and what still needs your real headset
 
 **Tested and passing:**
+- **Getaway rides (`test/server-test-7.mjs`):** hopping in, seats, 3 passengers max, cops vs civilians, passengers not hit by their own car, driver getting out and back in, passengers getting out, knocked-out passengers leaving, and escaping prison together in the van. Also tested live: a desktop driver with a VR passenger who stays locked to the seat while the car moves, shoots from the car, and is seen in the seat by the driver.
 - **Prison (77 more checks, `test/server-test-6.mjs`):** wanted levels up to 5, NPC cops cuffing you at 3 stars and resisting arrest, SWAT at 4-5, no shooting at 1 star, police SUVs, prison vs holding cell, the cutscene freezing you and taking weapons, skipping it, waking in your own cell, separate cells for friends, schedule + lockdown doors, guards chasing and catching, noises, camera alarms, looped cameras, the electric fence, escape progress shared between players, and every step of all five escape routes (including a real basketball throw scoring), then being caught again.
 - **Server (about 89 automated checks with real WebSocket clients, all passing):** room creation (6-character codes), joining by code (case-insensitive), wrong-code and room-full (9th player) errors, 8 players in one room, position sync, server hit detection with headshots and body shots, ammo tracking, fire-rate cheat blocked, fake-origin and wrong-weapon cheats blocked, bullets blocked by walls, eliminations, kill feed, scores, 5-second respawn, pickups (range-checked, disappear for everyone), reload timing, weapon switching, reconnect with the same player and score, public quick match, Team Deathmatch 4 v 4 split, rocket projectile + splash damage, match ending at the kill limit and auto-restarting, NPCs walking, robbing a store (progress, cash payout, store closing), wanted stars, cops spawning and shooting, NPC hit detection and eliminations, bounty, stars clearing on death, NPC traffic and hijacking, and the Cop/Civilian roles (cop spawns at the station, police cars and siren, cops can't rob, a nearby cop blocks robberies, robbery alerts, police dispatch cars driving the roads, donut-shop cops, arrests with a double bounty, no arresting innocent players, switching roles). Run them with `npm start` in one window and `npm test` in another.
 - **Desktop in Chrome (two real browser windows playing together):** menus, create room, invite link, join, WASD movement, jumping, shooting a friend until eliminated with server-confirmed headshots, kill feed, death screen, respawn, scoreboard, reload, pickup with E, customization preview, team name tags, reconnecting after a dropped connection, robbing the GUN SHOP through the front door (clerk hands up, progress bar, cash, wanted stars) and cops arriving and taking down the robber.

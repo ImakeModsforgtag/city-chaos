@@ -64,7 +64,7 @@ export class PrisonManager {
     if (!p.alive || p.jail || p.holding || p.role === 'cop') return false;
     const stars = p.wanted || 0;
     const room = this.room;
-    if (p.inCar) room.vehicles.playerGone(p);
+    room.vehicles.playerGone(p);
     const at = p.pose ? p.pose.h.slice(0, 3).map(r2) : [0, 1.5, 0];
     if (byPlayer && stars) byPlayer.cash = (byPlayer.cash || 0) + stars * 200; // arresting pays a double bounty
     this.saveInventory(p);
@@ -135,7 +135,12 @@ export class PrisonManager {
     if (!j) return;
     if (this.ball.holder === p.id) this.dropBall();
     this.releaseItems(p);
-    if (p.inCar) { const car = room.vehicles.cars.find(c => c.id === p.inCar); room.vehicles.playerGone(p); if (car && car.home) room.vehicles.sendHome(car); }
+    if (p.inCar) {
+      const car = room.vehicles.cars.find(c => c.id === p.inCar);
+      // friends riding along in the van escape too
+      if (car) for (const pid of [...room.vehicles.riders(car).keys()]) { const q = room.players.get(pid); if (q && q !== p && q.jail && q.jail.state === 'in') { p.jail.escaping = true; this.escape(q, 'vehicle'); } }
+      room.vehicles.playerGone(p); if (car && car.home) room.vehicles.sendHome(car);
+    } else room.vehicles.playerGone(p);
     p.jail = null;
     this.restoreInventory(p);
     // back in the city, as far from the police station as we can manage
@@ -161,7 +166,7 @@ export class PrisonManager {
   caught(p, guard) {
     const j = p.jail; if (!j || j.state !== 'in') return;
     if (this.ball.holder === p.id) this.dropBall();
-    if (p.inCar) this.room.vehicles.playerGone(p);
+    this.room.vehicles.playerGone(p);
     const had = j.items.size;
     this.releaseItems(p);
     const c = this.P.cells[j.cell];
@@ -458,10 +463,11 @@ export class PrisonManager {
     // fence shocks + escapes
     const fenceOn = t >= this.fenceOffUntil;
     for (const p of inside) {
+      if (!p.jail || p.jail.state !== 'in') continue;   // already escaped this tick (e.g. riding in a friend's van)
       const [x, y, z] = p.pose.h;
       if (x < PERIM.x0 - 0.7 || x > PERIM.x1 + 0.7 || z < PERIM.z0 - 0.7 || z > PERIM.z1 + 0.7) {
         if (y > -1.5) {
-          const how = p.inCar ? 'vehicle' : p.jail.disguise ? 'disguise' : z > PERIM.z1 && Math.abs(x - 23) < 4 ? 'maintenance' : x < PERIM.x0 && Math.abs(z - 437) < 4 ? 'sewer' : 'over the wall';
+          const how = p.inCar || p.ride ? 'vehicle' : p.jail.disguise ? 'disguise' : z > PERIM.z1 && Math.abs(x - 23) < 4 ? 'maintenance' : x < PERIM.x0 && Math.abs(z - 437) < 4 ? 'sewer' : 'over the wall';
           this.escape(p, how); continue;
         }
       } else if (!inPrisonArea(x, z)) { this.caught(p, null); continue; }

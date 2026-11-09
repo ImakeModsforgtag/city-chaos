@@ -278,7 +278,7 @@ export class NPCManager {
     n.yaw = Math.atan2(-dx, -dz);
     const stars = target.wanted;
     // 3+ stars: cops try to cuff you up close (move away or shoot to resist)
-    if (stars >= 3 && d3 < 2.3 && !target.arrestBy && !target.inCar && t > (n.nextArrest || 0)) {
+    if (stars >= 3 && d3 < 2.3 && !target.arrestBy && !target.inCar && !target.ride && t > (n.nextArrest || 0)) {
       n.arrest = { pid: target.id, start: t, x: tx, z: tz };
       target.arrestBy = { npc: n.id, start: t };
       room.sendTo(target, { type: 'arrestAttempt', id: n.id, t: ARREST_TIME });
@@ -295,7 +295,7 @@ export class NPCManager {
       n.lastProgress = t; n.progX = n.x; n.progZ = n.z;
       return;
     }
-    if (los && stars >= 3 && dist < 16 && !target.inCar) {
+    if (los && stars >= 3 && dist < 16 && !target.inCar && !target.ride) {
       // close in for the arrest instead of shooting
       n.state = NPC_STATE.AIM; this.walk(n, dx / dist, dz / dist, 3.6 * dt);
       n.lastProgress = t; n.progX = n.x; n.progZ = n.z;
@@ -336,7 +336,7 @@ export class NPCManager {
     if (!p || !p.alive || !p.pose || p.jail || p.holding) { n.arrest = null; if (p) p.arrestBy = null; return; }
     const [tx, , tz] = p.pose.h;
     n.yaw = Math.atan2(-(tx - n.x), -(tz - n.z)); n.state = NPC_STATE.AIM;
-    if (Math.hypot(tx - a.x, tz - a.z) > 3.2 || Math.hypot(tx - n.x, tz - n.z) > 3.6 || p.inCar) return this.resistArrest(p, 'running');
+    if (Math.hypot(tx - a.x, tz - a.z) > 3.2 || Math.hypot(tx - n.x, tz - n.z) > 3.6 || p.inCar || p.ride) return this.resistArrest(p, 'running');
     if (t - a.start >= ARREST_TIME) {
       n.arrest = null; p.arrestBy = null; n.nextArrest = t + 5;
       room.prison.arrest(p, null, n);

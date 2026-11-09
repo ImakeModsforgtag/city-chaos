@@ -86,7 +86,8 @@ function rebuildLocalHands() {
 }
 
 // ------------------------------------------------------------------ state
-const G = {
+const RIDERS = new Map();
+const G = { riders: RIDERS,
   room: null,            // { code, you, mode, isPublic, hostId, killLimit, timeLimit, teamScores }
   players: new Map(),    // id -> public info (+kills/deaths)
   me: { hp: MAX_HEALTH, alive: false, life: 0, team: -1, wanted: 0 },
@@ -254,6 +255,7 @@ net.on('joined', (m) => {
   cars.clear(); if (m.cars) cars.sync(m.cars, m.st);
   if (!m.inCar && driving.active) driving.exit();
   if (m.inCar && !driving.active) { const c = m.cars.find(k => k[0] === m.inCar); if (c) driving.enter(c); }
+  G.ride = m.ride ? { id: m.ride.car, seat: m.ride.seat } : null;
   G.me.wanted = me.wanted || 0;
   if (me.role && me.role !== profile.role) menu.setRole(me.role);
   weapons.setInventory(m.inv);
@@ -382,6 +384,27 @@ net.on('carExit', (m) => {
   const door = cars.doorWorld(c);
   door.y = c.y + 0.1;
   if (renderer.xr.isPresenting) teleport(door, c.yaw); else { walker.feet.copy(door); walker.vel.set(0, 0, 0); G.yaw = c.yaw; G.pitch = 0; }
+});
+net.on('carRide', (m) => {
+  if (m.on) G.riders.set(m.pid, { id: m.id, seat: m.seat });
+  else { G.riders.delete(m.pid); const q = remote.players.get(m.pid); if (q) q.avatar.root.position.set(0, 0, 0); }
+  if (m.pid !== G.room?.you) return;
+  if (m.on) {
+    G.ride = { id: m.id, seat: m.seat }; G.lastCarYaw = undefined;
+    const t = renderer.xr.isPresenting ? 'Getaway ride! Shoot with the trigger · B: get out' : 'Getaway ride! Click to shoot · E: get out';
+    hud.notice('🚗 GETAWAY RIDE', 1500); vrui.setNotice('GETAWAY RIDE! B: get out', 3); audio.playDoor();
+    if (!renderer.xr.isPresenting) toast(t, 4000);
+    return;
+  }
+  const car = cars.get(m.id) || (G.ride && cars.get(G.ride.id));
+  G.ride = null; G.lastCarYaw = undefined;
+  if (!car) return;
+  // step out of the door on your side of the car
+  const local = RIDE_SEATS[m.seat] || RIDE_SEATS[0];
+  const door = new THREE.Vector3(Math.sign(local.x) * 2.1, 0, local.z).applyAxisAngle(UP, car.yaw);
+  door.x += car.x; door.y = car.y + 0.1; door.z += car.z;
+  audio.playDoor();
+  if (renderer.xr.isPresenting) teleport(door, car.yaw); else { walker.feet.copy(door); walker.vel.set(0, 0, 0); }
 });
 net.on('honk', (m) => { const c = cars.get(m.id); if (c) audio.playHonk(new THREE.Vector3(c.x, c.y + 1, c.z)); });
 net.on('carHit', (m) => {
@@ -617,6 +640,16 @@ function frame() {
       rig.position.add(seat.sub(h2));
       vrMover.reset();
       G.vrSpeed = Math.abs(car.speed);
+    } else if (inRoom && G.me.alive && G.ride && rideCar()) {
+      // ---- VR passenger (getaway ride): the car carries you, you're free to look around and shoot
+      const car = rideCar();
+      if (G.lastCarYaw === undefined) G.lastCarYaw = car.yaw;
+      const dyaw = Math.atan2(Math.sin(car.yaw - G.lastCarYaw), Math.cos(car.yaw - G.lastCarYaw)); G.lastCarYaw = car.yaw;
+      if (dyaw) { const h = headWorld(new THREE.Vector3()); rig.position.sub(h).applyAxisAngle(UP, dyaw).add(h); rig.rotation.y += dyaw; rig.updateMatrixWorld(true); renderer.xr.updateCamera(camera); }
+      const seat = rideSeatWorld(car); const h2 = headWorld(new THREE.Vector3());
+      rig.position.add(seat.sub(h2));
+      vrMover.reset();
+      G.vrSpeed = Math.abs(car.speed || 0);
     } else if (inRoom && G.me.alive) {
       const camQ = camera.getWorldQuaternion(new THREE.Quaternion());
       const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camQ); fwd.y = 0; fwd.normalize();
@@ -655,7 +688,7 @@ function frame() {
       // weapons
       weapons.tryFire(R.trigger > 0.6, R.pressed.trigger);
       if (R.pressed.a) weapons.reload();
-      if (R.pressed.b) weapons.cycle(1);
+      if (R.pressed.b) { if (G.ride) net.send({ type: 'exitCar' }); else weapons.cycle(1); }
       let prompt = null; G.arrestPrompt = false;
       // arrest: cops grab a wanted player with either hand
       if (isCop()) for (const [side, ctl, st] of [['left', lc, L], ['right', rc, R]]) {
@@ -686,7 +719,7 @@ function frame() {
         if (!ctl || pickupPrompt) continue; // a pickup in reach takes priority; otherwise EITHER hand can grab the car
         const hp = ctl.grip.getWorldPosition(new THREE.Vector3());
         const car = cars.nearest(hp, 2.9);
-        if (!car || car.driverKind === DRIVER.PLAYER || hp.y > car.y + 2.2) continue;
+        if (!car || G.ride || (car.driverKind === DRIVER.PLAYER && !canRide(car)) || hp.y > car.y + 2.2) continue;
         prompt = carPrompt(car, 'Grip');
         if ((st.pressed.grip || st.held.grip) && t - (G.hijackAt || 0) > 0.8) { G.hijackAt = t; net.send({ type: 'hijack', id: car.id }); vrInput.pulse(side, 0.6, 60); }
       }
@@ -730,7 +763,7 @@ function frame() {
       if (wish.lengthSq() > 1) wish.normalize();
       // rotate local wish into world (yaw)
       const w = new THREE.Vector3(wish.x * Math.cos(G.yaw) + wish.z * Math.sin(G.yaw), 0, -wish.x * Math.sin(G.yaw) + wish.z * Math.cos(G.yaw));
-      const ev = walker.update(dt, { wish: w, sprint: k('ShiftLeft') || k('ShiftRight'), jump: playing && desk.hit('Space'), jumpHeld: k('Space'), climb: k('KeyW') ? 1 : k('KeyS') ? -1 : (k('Space') ? 1 : 0) });
+      const ev = G.ride && rideCar() ? rideHold() : walker.update(dt, { wish: w, sprint: k('ShiftLeft') || k('ShiftRight'), jump: playing && desk.hit('Space'), jumpHeld: k('Space'), climb: k('KeyW') ? 1 : k('KeyS') ? -1 : (k('Space') ? 1 : 0) });
       if (ev.step) audio.playStep(null, 0.8);
       if (ev.landed) audio.playStep(null, Math.min(1.6, ev.landed / 6));
       moving = wish.lengthSq() > 0.01 && walker.grounded;
@@ -749,14 +782,17 @@ function frame() {
         if (desk.hit('KeyQ')) weapons.cycle(-1);
         if (desk.mouse.wheel) weapons.cycle(desk.mouse.wheel > 0 ? 1 : -1);
         const eye = camera.getWorldPosition(new THREE.Vector3()), dir = camera.getWorldDirection(new THREE.Vector3());
-        const it = pickups.aimed(eye, dir, 3);
+        const it = G.ride ? null : pickups.aimed(eye, dir, 3);
         G.prompt = it ? `Press E to pick up ${pickups.label(it)}` : null;
         const perp = !it && isCop() ? arrestTarget(walker.feet.clone().setY(walker.feet.y + walker.height - 0.1), 2.4, false) : null;
         if (perp) { G.prompt = `🚔 Press E to ARREST ${perp.info.name}`; if (desk.hit('KeyE')) net.send({ type: 'arrest', id: perp.info.id }); }
         else if (it) { it.highlight = 1; if (desk.hit('KeyE')) net.send({ type: 'pickup', id: it.def.id }); }
         else {
           const car = cars.nearest(walker.feet.clone().setY(walker.feet.y + 0.5), 3.9);
-          if (car && car.driverKind !== DRIVER.PLAYER) {
+          if (G.ride) {
+            G.prompt = '🚗 Getaway ride · click to shoot · E: get out';
+            if (desk.hit('KeyE')) net.send({ type: 'exitCar' });
+          } else if (car && (car.driverKind !== DRIVER.PLAYER || canRide(car))) {
             G.prompt = carPrompt(car, 'Press E');
             if (desk.hit('KeyE')) net.send({ type: 'hijack', id: car.id });
           }
@@ -784,11 +820,19 @@ function frame() {
   if (inRoom && !cut.active && t - G.lastSend > 1 / 20) { G.lastSend = t; sendState(xr); }
 
   remote.update(dt, net.serverNow());
+  // friends riding in a car: pin their avatar to the seat of the (interpolated) car so they don't trail behind it
+  for (const [pid, r] of G.riders) {
+    const q = remote.players.get(pid), car = cars.get(r.id);
+    if (!q || !car || !q.head) continue;
+    const s = rideSeatWorld(car, r.seat);
+    q.avatar.root.position.set(s.x - q.head[0], s.y - q.head[1], s.z - q.head[2]);
+  }
   for (const [id, p] of remote.players) if (p.head) voice.setPosition(id, p.head[0], p.head[1], p.head[2]);
   const camPos = camera.getWorldPosition(new THREE.Vector3());
   pickups.update(dt, t, camPos);
   npcs.cull = xr ? 34 : 50;
   npcs.update(dt, net.serverNow(), camPos);
+  cars.rideId = G.ride ? G.ride.id : 0;
   cars.update(dt, net.serverNow(), camPos, driving.car, xr);
   prisonView.update(dt, net.serverNow(), camPos, { prisoner: prison.prisoner, myBall: prison.ballHeld && xr, handPos: G.ballHandPos });
   if (prisonView.active) prison.tick(dt);
@@ -834,7 +878,23 @@ function arrestTarget(p, range, hand) {
   }
   return best;
 }
+// ------------------------------------------------------------------ getaway rides (passenger seats)
+const RIDE_SEATS = [new THREE.Vector3(0.42, 1.28, 0.25), new THREE.Vector3(-0.42, 1.28, 1.05), new THREE.Vector3(0.42, 1.28, 1.05)];
+const rideCar = () => (G.ride ? cars.get(G.ride.id) : null);
+function rideSeatWorld(car, seat = G.ride ? G.ride.seat : 0) { const v = RIDE_SEATS[seat].clone().applyAxisAngle(UP, car.yaw); v.x += car.x; v.y += car.y; v.z += car.z; return v; }
+function rideHold() {
+  const car = rideCar(), seat = rideSeatWorld(car);
+  walker.feet.set(seat.x, seat.y - (walker.height - 0.05), seat.z); walker.vel.set(0, 0, 0);
+  return {};
+}
+// a friend with the same role is driving this car and there's room
+function canRide(car) {
+  if (car.driverKind !== DRIVER.PLAYER || car.pid === G.room?.you) return false;
+  const d = G.players.get(car.pid);
+  return !!d && (d.role || 'civilian') === myRole();
+}
 function carPrompt(car, verb) {
+  if (car.driverKind === DRIVER.PLAYER) return `🚗 ${verb} to hop in with ${G.players.get(car.pid)?.name || 'your friend'} (getaway ride)`;
   if (car.police) return isCop() ? `🚓 ${verb} to drive the police car` : `🚓 ${verb} to steal the police car (+2★)`;
   if (car.driverKind === DRIVER.NPC) return isCop() ? `🚗 ${verb} to commandeer the car` : `🚗 ${verb} to hijack the car`;
   return `🚗 ${verb} to get in`;

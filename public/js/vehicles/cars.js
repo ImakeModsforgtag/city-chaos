@@ -149,7 +149,7 @@ export class Cars {
   update(dt, serverNow, camPos, local, firstPerson = false) {
     const t = serverNow - DELAY;
     for (const c of this.map.values()) {
-      const wantOpen = !!(local && c.id === local.id && firstPerson);
+      const wantOpen = !!(local && c.id === local.id && firstPerson) || c.id === this.rideId;   // open top for the car you're driving (VR) or riding in
       if (wantOpen !== c.open) { c.open = wantOpen; c.body.geometry = carGeometry(c.body.userData.color, wantOpen).body; }
       if (local && c.id === local.id) {
         c.x = local.x; c.y = local.y; c.z = local.z; c.yaw = local.yaw; c.speed = local.speed;
@@ -214,7 +214,7 @@ export class Driving {
 
   hits(x, y, z, yaw) {
     const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
-    for (const o of [-1.25, 0, 1.25]) if (this.world.sphereOverlaps(x + fx * o, y + 0.95, z + fz * o, 0.95)) return true;
+    for (const o of [-1.25, 0, 1.25]) if (this.world.sphereOverlaps(x + fx * o, y + 1.0, z + fz * o, 0.95)) return true; // 5cm clearance so the surface the car sits on never counts as a wall
     return false;
   }
 
