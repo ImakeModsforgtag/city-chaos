@@ -93,11 +93,11 @@ async def main():
         print('walking to pickup', pk['weapon'], pk['p'])
         await A.evaluate(f"__walkTo({pk['p'][0]}, {pk['p'][2]} + 1.2)")
         await A.evaluate(f"__face({pk['p'][0]}, {pk['p'][1]}, {pk['p'][2]})")
-        await A.wait_for_timeout(400)
+        await A.wait_for_timeout(2800)  # land after the fly-over
         print('prompt:', await A.inner_text('#prompt'))
         await A.screenshot(path='/tmp/shots/09_pickup.png')
         await A.keyboard.press('KeyE'); await A.wait_for_timeout(500)
-        print('A slots:', await A.inner_text('#slots'))
+        await A.wait_for_timeout(1200); print('A slots:', await A.inner_text('#slots'), await A.evaluate('JSON.stringify(__cc.weapons.slots.map(s=>s.w))'), 'feet', await A.evaluate('__cc.walker.feet.toArray().map(v=>+v.toFixed(1))'))
         await A.screenshot(path='/tmp/shots/10_newgun.png')
         print('\n'.join(logs[-20:]) or 'no console errors')
         await b.close()

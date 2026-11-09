@@ -189,13 +189,16 @@ export class VRUI {
     // head HUD
     this.feed.forEach(f => f.t -= dt); this.feed = this.feed.filter(f => f.t > 0);
     if (this.notice) { this.notice.t -= dt; if (this.notice.t <= 0) this.notice = null; }
-    const feedKey = this.feed.map(f => f.s).join('|') + (this.notice ? this.notice.s : '') + (st.death ? st.death.by + Math.ceil(st.death.t) : '') + (st.matchEnd || '') + (st.prompt || '') + (st.rob ? st.rob.text + Math.round(st.rob.p * 20) : '');
+    const feedKey = this.feed.map(f => f.s).join('|') + (this.notice ? this.notice.s : '') + (st.death ? st.death.by + Math.ceil(st.death.t) : '') + (st.matchEnd || '') + (st.prompt || '') + (st.rob ? st.rob.text + Math.round(st.rob.p * 20) : '') + '|' + (st.wanted || 0) + '|' + (st.prison ? st.prison.vr : '') + '|' + (st.sub || '');
     this.hud.draw(feedKey, (x, w, h) => {
       this.feed.forEach((f, i) => {
         x.font = `bold 30px ${FONT}`; const tw = x.measureText(f.s).width + 40;
         box(x, w - tw - 10, 10 + i * 56, tw, 50, 'rgba(29,20,66,0.75)', 16, INK, 4);
         text(x, f.s, w - tw / 2 - 10, 36 + i * 56, 30);
       });
+      if (st.wanted) { text(x, '★'.repeat(st.wanted) + '☆'.repeat(5 - st.wanted), w / 2, 40, 54, '#ffd23f'); text(x, WANTED_VR[st.wanted], w / 2, 88, 26, '#ff9f9f'); }
+      if (st.prison) { const lines = st.prison.vr.split('\n'); box(x, 10, 10, 420, 30 + lines.length * 34, 'rgba(29,20,66,0.78)', 16, INK, 4); lines.forEach((l, i) => text(x, l, 24, 40 + i * 34, 26, i === 0 ? '#ffd23f' : l.startsWith('⚠') ? '#ff5d5d' : '#fff', 'left')); }
+      if (st.sub) { const s = st.sub.replace(/<[^>]+>/g, ''); box(x, 40, 590, w - 80, 46, 'rgba(0,0,0,0.75)', 14, INK, 3); text(x, s.length > 70 ? s.slice(0, 68) + '…' : s, w / 2, 614, 24); }
       if (this.notice) text(x, this.notice.s, w / 2, 290, 70, '#ffd23f');
       if (st.prompt && !st.rob) { box(x, w / 2 - 260, 470, 520, 70, 'rgba(29,20,66,0.8)', 20, INK, 5); text(x, st.prompt, w / 2, 506, 34); }
       if (st.rob) {
@@ -225,4 +228,5 @@ export class VRUI {
     } else this.board.mesh.visible = false;
   }
 }
+const WANTED_VR = ['', 'Police are investigating', 'Police are chasing you', 'Police will try to arrest you', 'SWAT joined the pursuit', 'MAXIMUM POLICE RESPONSE'];
 export { TEAM_NAMES, WEAPONS };

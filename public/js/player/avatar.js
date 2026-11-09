@@ -15,6 +15,7 @@ const G = {
 const black = L(0x1d1442), white = L(0xffffff), gold = L(0xffd23f, { emissive: 0x442200 }), glowCyan = new THREE.MeshBasicMaterial({ color: 0x6ff7ff });
 const flame = new THREE.MeshBasicMaterial({ color: 0xffa13b });
 const copBlue = L(0x1f3a93);
+const orange = L(0xff7f27);
 
 function mesh(geo, mat, x = 0, y = 0, z = 0, sx = 1, sy = sx, sz = sx, rx = 0, ry = 0, rz = 0) {
   const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.set(rx, ry, rz);
@@ -60,7 +61,8 @@ export class Avatar {
     }
     H.add(mesh(G.box, black, 0, -0.07, faceZ + 0.005, 0.09, 0.02, 0.02));
     // hats
-    switch (cos.cop ? 7 : cos.hat | 0) {
+    switch (cos.guard ? 8 : cos.prisoner ? 0 : cos.cop ? 7 : cos.hat | 0) {
+      case 8: H.add(mesh(G.cyl, L(0x2c3e50), 0, topY + 0.02, 0, 0.23, 0.13, 0.23)); H.add(mesh(G.box, black, 0, topY - 0.05, -0.2, 0.3, 0.02, 0.16)); H.add(mesh(G.box, L(0xbdc3c7), 0, topY + 0.04, -0.232, 0.07, 0.06, 0.01)); break; // guard cap
       case 7: H.add(mesh(G.cyl, copBlue, 0, topY + 0.02, 0, 0.23, 0.13, 0.23)); H.add(mesh(G.box, black, 0, topY - 0.05, -0.2, 0.3, 0.02, 0.16)); H.add(mesh(G.box, gold, 0, topY + 0.04, -0.232, 0.07, 0.06, 0.01)); break; // police cap
       case 1: H.add(mesh(G.half, acc, 0, topY - 0.06, 0, 0.21, 0.14, 0.21)); H.add(mesh(G.cyl, acc, 0, topY - 0.05, -0.15, 0.13, 0.015, 0.12)); break; // cap
       case 2: H.add(mesh(G.cyl, black, 0, topY + 0.02, 0, 0.26, 0.02, 0.26)); H.add(mesh(G.cyl, black, 0, topY + 0.15, 0, 0.15, 0.26, 0.15)); H.add(mesh(G.cyl, L(0xff3d7f), 0, topY + 0.06, 0, 0.152, 0.05, 0.152)); break; // top hat
@@ -84,16 +86,24 @@ export class Avatar {
       case 3: B.add(mesh(G.box, skin, 0, -0.62, 0, 0.44, 0.56, 0.3)); B.add(mesh(G.box, acc, 0, -0.55, -0.155, 0.22, 0.16, 0.02)); B.add(mesh(G.sphere, glowCyan, 0.06, -0.55, -0.17, 0.025)); B.add(mesh(G.sphere, new THREE.MeshBasicMaterial({ color: 0xff3d7f }), -0.04, -0.55, -0.17, 0.025)); break;
       default: B.add(mesh(G.dodec, skin, 0, -0.62, 0, 0.29, 0.33, 0.25));
     }
-    B.add(mesh(G.box, cos.cop ? black : acc, 0, -0.8, 0, 0.42, 0.06, 0.3)); // belt/accent band
+    B.add(mesh(G.box, cos.cop || cos.guard ? black : cos.prisoner ? orange : acc, 0, -0.8, 0, 0.42, 0.06, 0.3)); // belt/accent band
+    if (cos.prisoner) { // orange prison jumpsuit over your body + a number patch
+      B.add(mesh(G.box, orange, 0, -0.62, 0, 0.5, 0.62, 0.42));
+      B.add(mesh(G.box, white, 0, -0.5, -0.215, 0.16, 0.08, 0.02));
+    }
+    if (cos.guard) { // stolen guard uniform
+      B.add(mesh(G.box, L(0x6c7a89), 0, -0.62, 0, 0.5, 0.62, 0.42));
+      B.add(mesh(G.box, L(0xbdc3c7), 0.09, -0.5, -0.215, 0.07, 0.08, 0.02));
+    }
     if (cos.cop) { // police uniform: blue vest + gold badge over your colors
       B.add(mesh(G.box, copBlue, 0, -0.6, 0, 0.5, 0.36, 0.42));
       B.add(mesh(G.box, gold, 0.09, -0.5, -0.215, 0.07, 0.08, 0.02));
     }
     this.teamBand = mesh(G.cyl8, L(0xffffff), 0, -0.4, 0, 0.2, 0.05, 0.2); this.teamBand.visible = false; B.add(this.teamBand);
     // little legs (stubby, cartoony)
-    this.legs = [-1, 1].map(sx => { const l = mesh(G.cyl8, darker, sx * 0.1, -0.98, 0, 0.07, 0.16, 0.07); B.add(l); return l; });
+    this.legs = [-1, 1].map(sx => { const l = mesh(G.cyl8, cos.prisoner ? orange : cos.guard ? L(0x2c3e50) : darker, sx * 0.1, -0.98, 0, 0.07, 0.16, 0.07); B.add(l); return l; });
     if (this.isVR) this.legs.forEach(l => l.visible = false);
-    switch (cos.back | 0) {
+    switch (cos.prisoner || cos.guard ? 0 : cos.back | 0) {
       case 1: B.add(mesh(G.box, acc, 0, -0.58, 0.2, 0.3, 0.36, 0.14)); B.add(mesh(G.box, darker, 0, -0.66, 0.28, 0.22, 0.14, 0.04)); break;
       case 2: for (const sx of [-1, 1]) { B.add(mesh(G.cyl, L(0xb0bec5), sx * 0.09, -0.6, 0.22, 0.07, 0.36, 0.07)); B.add(mesh(G.cone, flame, sx * 0.09, -0.86, 0.22, 0.05, 0.14, 0.05, Math.PI)); } break;
       case 3: B.add(mesh(G.box, L(0xd62828), 0, -0.68, 0.16, 0.42, 0.62, 0.02, 0.12)); break;

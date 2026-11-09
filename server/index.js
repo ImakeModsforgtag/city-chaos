@@ -107,7 +107,7 @@ wss.on('connection', (ws, req) => {
 
     if (msg.type === 'create' || msg.type === 'join' || msg.type === 'quick') {
       let room;
-      if (msg.type === 'create') room = createRoom({ mode: msg.mode, isPublic: false, killLimit: msg.killLimit, timeLimit: msg.timeLimit });
+      if (msg.type === 'create') room = createRoom({ mode: msg.mode, isPublic: false, killLimit: msg.killLimit, timeLimit: msg.timeLimit, crimes: msg.crimes });
       else if (msg.type === 'join') {
         room = state.rooms.get(String(msg.code || '').toUpperCase().trim());
         if (!room) return client.send({ type: 'error', code: 'NO_ROOM', message: 'Room not found. Check the code and try again.' });

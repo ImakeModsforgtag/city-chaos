@@ -5,6 +5,8 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 export { esc };
 
+export const WANTED_TEXT = ['', 'Police are investigating', 'Police are chasing you', 'Police will try to arrest you', 'SWAT has joined the pursuit', 'MAXIMUM POLICE RESPONSE'];
+
 export class HUD {
   constructor() {
     this.el = $('hud'); this.cache = {};
@@ -36,7 +38,13 @@ export class HUD {
     if (st.teams) this.set('teamscore', `<b class="red">${st.teamScores[0]}</b> : <b class="blue">${st.teamScores[1]}</b>`, 'innerHTML');
     this.set('myscore', `K ${st.kills} · D ${st.deaths}`);
     this.set('cash', '$' + (st.cash || 0));
-    this.set('wanted', '★'.repeat(st.wanted || 0));
+    const wv = st.wanted || 0;
+    this.set('wanted', wv ? `<span class="on">${'★'.repeat(wv)}</span><span class="off">${'★'.repeat(5 - wv)}</span><i>${WANTED_TEXT[wv]}</i>` : '', 'innerHTML');
+    // prison status + subtitles
+    const pp = $('prisonpanel');
+    if (st.prison) { pp.classList.remove('hidden'); this.set('prisonpanel', st.prison.html, 'innerHTML'); } else pp.classList.add('hidden');
+    const sub = $('subtitle');
+    if (st.sub) { sub.classList.remove('hidden'); this.set('subtitle', st.sub, 'innerHTML'); } else sub.classList.add('hidden');
     const robEl = $('robbar');
     if (st.rob) { robEl.classList.remove('hidden'); this.set('robtext', st.rob.text); $('robfill').style.width = Math.round((st.rob.p || 0) * 100) + '%'; }
     else robEl.classList.add('hidden');
@@ -47,7 +55,7 @@ export class HUD {
     $('death').classList.toggle('hidden', !st.death);
     if (st.death) { this.set('death-by', st.death.by ? `by ${st.death.by}` : ''); this.set('death-timer', `Respawning in ${Math.max(1, Math.ceil(st.death.t))}`); }
     $('crosshair').classList.toggle('hidden', !!st.death || !!st.driving);
-    $('ammobox').classList.toggle('hidden', !!st.driving); $('slots').classList.toggle('hidden', !!st.driving);
+    $('ammobox').classList.toggle('hidden', !!st.driving || !st.weapon); $('slots').classList.toggle('hidden', !!st.driving || !st.slots.length);
     // scoreboard
     const sb = $('scoreboard');
     sb.classList.toggle('hidden', !st.showBoard);

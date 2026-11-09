@@ -54,7 +54,7 @@ async function walk(bot, from, to) {
   ok(!!A.token, 'hello/welcome handshake gives reconnect token');
 
   // ---- create room
-  A.send({ type: 'create', mode: 'ffa' });
+  A.send({ type: 'create', mode: 'ffa', crimes: false });
   const ja = await A.wait(m => m.type === 'joined');
   ok(/^[A-Z2-9]{6}$/.test(ja.code), 'CREATE ROOM gives 6 character code: ' + ja.code);
   ok(ja.inv.slots[0].w === 'pistol', 'player spawns holding a pistol');

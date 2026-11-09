@@ -23,6 +23,8 @@ const PALETTE = {
   crate: 0xc98a3c, rareCrate: 0xff3b6b, diner: 0x4ecdc4
 };
 
+import { buildPrison } from './prison.js';
+
 export function buildMap() {
   const boxes = [];      // { min:[x,y,z], max:[x,y,z], c:color, s:solid }
   const ladders = [];    // climb zones for desktop / joystick players
@@ -32,6 +34,7 @@ export function buildMap() {
   const spawns = [];     // player spawn points  { p:[x,y,z], team:-1|0|1 }
   const labels = [];     // signs { text, p:[x,y,z], rotY, color }
   const policeLot = [], copSpawns = [], policeExit = [];
+  let holding = null;   // police station holding cells (short arrests, under 3 stars)
   const shops = [];      // robbable stores { name, keeper:[x,y,z], yaw } (yaw 0 = facing -Z)
 
   const box = (x0, y0, z0, x1, y1, z1, c, solid = true) => {
@@ -298,6 +301,9 @@ export function buildMap() {
     // interior: front desk + cells
     box(x + 14, Y, z + 15, x + 28, 1.1, z + 16, PALETTE.wood);
     for (let k = 0; k < 3; k++) box(x + 26 + k * 3, Y, z + 4.3, x + 26.15 + k * 3, 3.9, z + 9, PALETTE.metal, true);
+    box(x + 26, Y, z + 9, x + 32.15, 3.9, z + 9.15, PALETTE.metal, true); // holding cell bars (front)
+    labels.push({ text: 'HOLDING', p: [x + 29, 3.4, z + 9.17], rotY: 0, color: '#ffffff', bg: '#0d47a1' });
+    holding = { cells: [[x + 27.6, Y, z + 6.6], [x + 30.6, Y, z + 6.6]], release: [x + 21, Y, z + 27.5] };
     pickup('weapon', 'shotgun', x + 20, 1.0, z + 10);
     pickup('weapon', 'shotgun', x + 30, 4 + 1.0, z + 18);
     pickup('ammo', null, x + 12, 1.0, z + 20);
@@ -599,5 +605,6 @@ export function buildMap() {
 
   const dn = shops.find(sh => sh.name === 'DONUTS');
   const donutDoor = dn ? [dn.keeper[0], 0.15, dn.keeper[2] + 12.2] : [0, 0, 0]; // just outside the donut shop's front door
-  return { boxes, ladders, windows, props, pickups, spawns, labels, shops, trafficLoops, policeLot, copSpawns, policeExit, donutDoor, worldHalf: WORLD_HALF, blockStarts: BLOCK_STARTS, block: BLOCK };
+  const prison = buildPrison();
+  return { boxes, ladders, windows, props, pickups, spawns, labels, shops, trafficLoops, policeLot, copSpawns, policeExit, donutDoor, holding, prison, worldHalf: WORLD_HALF, blockStarts: BLOCK_STARTS, block: BLOCK };
 }

@@ -22,6 +22,11 @@ import { DesktopInput } from './ui/desktopInput.js';
 import { HUD, toast, esc } from './ui/hud.js';
 import { Menu } from './ui/menu.js';
 import { settings, profile, saveProfile, setSetting } from './ui/settings.js';
+import { PrisonView } from './prison/prisonView.js';
+import { PrisonClient } from './prison/prisonClient.js';
+import { ArrestCutscene } from './prison/cutscene.js';
+import { inPrisonArea, PRISON } from '/shared/prison.js';
+import { WANTED_TEXT } from './ui/hud.js';
 import * as audio from './audio/audio.js';
 
 const $ = (id) => document.getElementById(id);
@@ -30,12 +35,13 @@ const loadStep = (pct, txt) => { $('loadfill').style.width = pct + '%'; if (txt)
 // ------------------------------------------------------------------ world
 loadStep(10, 'Building the city...');
 const map = buildMap();
-const world = new CollisionWorld(map.boxes);
+const world = new CollisionWorld(map.boxes.concat(map.prison.boxes));   // city + prison (prison doors toggle .off)
 const canvas = $('game');
 const engine = createEngine(canvas);
 const { renderer, scene, camera, rig } = engine;
 loadStep(40, 'Painting buildings...');
 const city = buildCity(scene, map);
+const prisonView = new PrisonView(scene, map, city);
 const effects = new Effects(scene);
 const pickups = new Pickups(scene, map);
 const sky = scene.getObjectByName('sky');
@@ -51,7 +57,7 @@ const remote = new RemotePlayers(scene, effects);
 const npcs = new NPCs(scene, effects);
 const cars = new Cars(scene);
 const driving = new Driving(world, cars);
-const wIcon = (w) => w === 'car' ? '🚗' : w === 'cop' ? '👮' : w === 'arrest' ? '🚔' : (WEAPONS[w] && WEAPONS[w].icon) || '💥';
+const wIcon = (w) => w === 'car' ? '🚗' : w === 'cop' ? '👮' : w === 'arrest' ? '🚔' : w === 'shock' ? '⚡' : (WEAPONS[w] && WEAPONS[w].icon) || '💥';
 const weapons = new WeaponSystem({ scene, camera, effects, net, world, remote });
 weapons.npcs = npcs;
 const vrInput = new VRInput(renderer, rig);
@@ -59,8 +65,12 @@ const vrui = new VRUI({ scene, camera, input: vrInput });
 const hud = new HUD();
 const desk = new DesktopInput(canvas);
 const voice = new Voice(net);
-const walker = new Walker(world, map.ladders);
-const vrMover = new VRMover(world, map.ladders);
+const allLadders = map.ladders.concat(map.prison.ladders);
+const walker = new Walker(world, allLadders);
+const vrMover = new VRMover(world, allLadders);
+const prison = new PrisonClient({ net, map, world, view: prisonView, npcs });
+const cut = new ArrestCutscene({ scene, camera, rig, map, world, prisonView });
+let pendingTp = null;
 
 // VR weapon holder lives on the right controller's pointing pose
 const vrHolder = new THREE.Group();
@@ -247,6 +257,10 @@ net.on('joined', (m) => {
   G.me.wanted = me.wanted || 0;
   if (me.role && me.role !== profile.role) menu.setRole(me.role);
   weapons.setInventory(m.inv);
+  // prison state (also restores it after a reconnect)
+  prison.reset(); if (cut.active && !m.jail) cut.stop();
+  if (m.prison) prison.onState(m.prison, camera.getWorldPosition(new THREE.Vector3()));
+  if (m.jail) { prison.onMe(m.jail); if (m.jail.state === 'cut') net.send({ type: 'skipCut' }); }
   G.remaining = m.match.remaining;
   G.matchEnd = m.match.state === 'ended' ? winnerText(m.match.winner) : null;
   if (!reconnect && m.spawn) teleport(new THREE.Vector3(...m.spawn.p), m.spawn.yaw);
@@ -413,12 +427,12 @@ net.on('robbed', (m) => {
 });
 net.on('wanted', (m) => {
   const p = G.players.get(m.id); if (p) p.wanted = m.wanted;
+  if (m.id === G.room?.you && m.wanted > (G.me.wanted || 0)) { const t = `${'★'.repeat(m.wanted)} ${WANTED_TEXT[m.wanted]}${m.reason ? ' (' + m.reason + ')' : ''}`; hud.notice(t, 2200); vrui.setNotice(t, 2.2); }
   remote.setWanted(m.id, m.wanted);
   if (isCop() && m.id !== G.room?.you && m.wanted > 0 && p) { const t = `🚨 ${p.name} is WANTED ${'★'.repeat(m.wanted)}`; hud.feed(esc(t), true); vrui.addFeed(t); }
   if (m.id !== G.room?.you) return;
   const before = G.me.wanted; G.me.wanted = m.wanted;
-  if (m.wanted > before) { const t = `${'★'.repeat(m.wanted)} WANTED!`; hud.notice(t, 1800); vrui.setNotice(t, 1.8); }
-  else if (m.wanted === 0 && before > 0 && m.reason === 'lost') { hud.notice('😎 You lost the cops!', 2000); vrui.setNotice('You lost the cops!', 2); }
+  if (m.wanted === 0 && before > 0 && m.reason === 'lost') { hud.notice('😎 You lost the cops!', 2000); vrui.setNotice('You lost the cops!', 2); }
 });
 // police / roles
 net.on('robAlert', (m) => {
@@ -430,6 +444,65 @@ net.on('penalty', (m) => { const t = `👮 -$${m.amt}: ${m.reason}`; hud.notice(
 net.on('dispatch', (m) => { if (m.target === G.room?.you) { hud.notice('🚓 A POLICE CAR IS ON THE WAY!', 2000); vrui.setNotice('POLICE CAR ON THE WAY!', 2); } });
 net.on('copsOut', (m) => { const c = cars.get(m.id); if (c) audio.playDoor(); });
 net.on('siren', (m) => { const c = cars.get(m.id); if (c) { c.siren = m.on; c.sirenT = 0; } });
+// ------------------------------------------------------------------ arrests + prison
+net.on('tp', (m) => { G.me.life = m.life; if (cut.active) pendingTp = m; else applyTp(m); });
+net.on('arrestCut', (m) => {
+  if (driving.active) driving.exit();
+  prison.me = { state: 'cut', cell: m.cell, items: [], pflags: [], baskets: 0 };
+  G.arrestBar = null; G.prompt = null; vrui.notice = null; vrui.feed = [];
+  const xr = renderer.xr.isPresenting;
+  cut.start(m, { xr, cos: { ...profile.cos }, name: profile.name, skipLabel: xr ? 'Press B to skip' : 'SPACE to skip' });
+});
+net.on('jailStart', () => { cut.serverDone = true; if (prison.me) prison.me.state = 'in'; G.me.hp = MAX_HEALTH; G.me.alive = true; G.death = null; });
+net.on('pMe', (m) => prison.onMe(m));
+net.on('pState', (m) => prison.onState(m, camera.getWorldPosition(new THREE.Vector3())));
+net.on('pHold', (m) => prison.onHold(m));
+net.on('pMsg', (m) => prison.say(esc(m.text), 3800));
+net.on('pTalkMsg', (m) => { prison.say(`<b>${esc(m.name)}:</b> ${esc(m.text)}`, 9000); audio.playHover(); });
+net.on('pSay', (m) => npcs.say(m.id, m.text, 2600, '#34495e'));
+net.on('npcSay', (m) => npcs.say(m.id, m.text, 2600, '#1f3a93'));
+net.on('pAnnounce', (m) => { if (prison.prisoner || prisonView.active) { audio.playChime(); prison.say('📢 ' + esc(m.text), 6000); } });
+net.on('pAlarm', (m) => {
+  if (!(prison.prisoner || prisonView.active)) return;
+  if (m.on) { hud.notice('⚠ ALARM! ' + (m.reason || ''), 2500); vrui.setNotice('⚠ ALARM!', 2.5); audio.playAlarm(); }
+  else { hud.notice('Alarm cleared', 1500); vrui.setNotice('Alarm cleared', 1.5); }
+});
+net.on('pCaught', (m) => {
+  hud.notice('🚨 CAUGHT! Back to your cell', 2600); vrui.setNotice('CAUGHT! Back to your cell', 2.6); audio.playCellDoor(null);
+  if (m.items) prison.say('The guards confiscated everything you were carrying.', 4500);
+});
+net.on('pShock', (m) => {
+  audio.playShock(); hud.notice('⚡ ZAP!', 1200); vrui.setNotice('⚡ ZAP!', 1.2); vrInput.pulse('left', 1, 300); vrInput.pulse('right', 1, 300);
+  const v = new THREE.Vector3(...m.push);
+  if (renderer.xr.isPresenting) { vrMover.reset(); rig.position.addScaledVector(v, 0.25); } else walker.vel.copy(v);
+});
+net.on('pScore', (m) => {
+  if (m.by === G.room?.you) { hud.notice(`🏀 SWISH! ${m.n} basket${m.n > 1 ? 's' : ''}`, 1600); vrui.setNotice(`🏀 SWISH! (${m.n})`, 1.6); }
+  if (prisonView.active) audio.playSwish();
+});
+net.on('pBall', (m) => prisonView.pushBall({ ...m, st: m.st || net.serverNow() }));
+net.on('arrested', (m) => {
+  const who = nameOf(m.id), by = m.by ? nameOf(m.by) : 'the police';
+  const txt = m.prison ? `🚔 ${who} was arrested by ${by} and sent to PRISON` : `🚔 ${who} was arrested by ${by}`;
+  hud.feed(esc(txt), m.id === G.room?.you || m.by === G.room?.you); vrui.addFeed(txt);
+  if (m.scores) for (const [id, k, d, c] of m.scores.p) { const p = G.players.get(id); if (p) { p.kills = k; p.deaths = d; p.cash = c || 0; } }
+  if (m.by === G.room?.you) { hud.notice(`🚔 ARREST! +$${m.stars * 200}`, 1800); vrui.setNotice('ARREST!', 1.8); audio.playCash(); }
+  if (m.id === G.room?.you) { G.arrestBar = null; audio.playCuffs(); }
+});
+net.on('arrestShort', (m) => { hud.notice(`🚔 ARRESTED! Holding cell for ${m.t}s`, 3000); vrui.setNotice(`ARRESTED! Holding cell ${m.t}s`, 3); prison.say('Under 3 stars: a short stay in the police station holding cell.', 5000); });
+net.on('released', () => { hud.notice('Released. Stay out of trouble!', 2200); vrui.setNotice('Released!', 2); });
+net.on('escaped', (m) => {
+  const txt = `🔓 ${nameOf(m.id)} ESCAPED FROM PRISON (${m.how})!`;
+  hud.feed(esc(txt), m.id === G.room?.you); vrui.addFeed(txt);
+  if (m.id === G.room?.you) {
+    prison.me = null; prison.hold = null;
+    hud.notice('🔓 PRISON ESCAPE SUCCESSFUL!', 4000); vrui.setNotice('PRISON ESCAPE SUCCESSFUL!', 4);
+    prison.say('★★★★★ Every cop in the city is looking for you. Hide and lose them!', 6000);
+    audio.playWin(); audio.playSiren(null);
+  }
+});
+net.on('arrestAttempt', (m) => { G.arrestBar = { start: performance.now() / 1000, dur: m.t }; vrInput.pulse('left', 0.8, 200); vrInput.pulse('right', 0.8, 200); audio.playCuffs(); });
+net.on('arrestResist', () => { G.arrestBar = null; hud.notice('You resisted arrest! +1 ★', 1800); vrui.setNotice('RESISTED ARREST +1★', 1.8); });
 net.on('pickup', (m) => {
   pickups.setAvail(m.id, m.avail);
   if (!m.avail && m.by === G.room?.you) {
@@ -501,7 +574,8 @@ function frame() {
   const canAct = inRoom && G.me.alive && !G.matchEnd;
   let moving = false;
 
-  if (xr) {
+  if (cut.active) runCutscene(dt, xr);
+  else if (xr) {
     if (pendingVRTeleport) { teleport(pendingVRTeleport.p, pendingVRTeleport.yaw); pendingVRTeleport = null; rig.updateMatrixWorld(true); renderer.xr.updateCamera(camera); }
     const s = vrInput.update();
     const L = s.left, R = s.right;
@@ -556,7 +630,7 @@ function frame() {
       clampRig();
       // safety net: if you ever end up under the map, go back to the last spot you stood safely
       { const h2 = headWorld(new THREE.Vector3());
-        if (h2.y < -6.5) { rig.position.copy(G.vrSafe || rig.position); vrMover.reset(); }
+        if (h2.y < (inPrisonArea(h2.x, h2.z) ? -9 : -6.5)) { rig.position.copy(G.vrSafe || rig.position); vrMover.reset(); }
         else if (vrMover.gorilla.anyTouching || vrMover.grounded) { (G.vrSafe ||= new THREE.Vector3()).copy(rig.position); } }
       const sp = rig.position.distanceTo(before) / Math.max(dt, 1e-3);
       G.vrSpeed = (G.vrSpeed || 0) * 0.85 + sp * 0.15;
@@ -661,7 +735,7 @@ function frame() {
       if (ev.landed) audio.playStep(null, Math.min(1.6, ev.landed / 6));
       moving = wish.lengthSq() > 0.01 && walker.grounded;
       clampWalker();
-      if (walker.feet.y < -6.5) { walker.feet.copy(G.deskSafe || walker.feet.set(0, 1, 0)); walker.vel.set(0, 0, 0); }
+      if (walker.feet.y < (inPrisonArea(walker.feet.x, walker.feet.z) ? -9 : -6.5)) { walker.feet.copy(G.deskSafe || walker.feet.set(0, 1, 0)); walker.vel.set(0, 0, 0); }
       else if (walker.grounded) (G.deskSafe ||= new THREE.Vector3()).copy(walker.feet);
       rig.position.copy(walker.feet); rig.rotation.set(0, G.yaw, 0);
       camera.position.set(0, walker.height - 0.05, 0);
@@ -700,13 +774,14 @@ function frame() {
   rig.updateMatrixWorld(true);
   if (xr) renderer.xr.updateCamera(camera);
 
-  if (weapons.model) weapons.model.visible = !driving.active;
+  if (weapons.model) weapons.model.visible = !driving.active && !cut.active;
+  if (!cut.active && inRoom) prisonInteract(dt, t, xr);
   weapons.update(dt, moving);
   if (G.death) G.death.t -= dt;
-  updateRobbery(t, canAct && !driving.active && !(xr && vrui.menuOpen) && (xr || G.view === 'playing'));
+  updateRobbery(t, canAct && !driving.active && !cut.active && !prison.prisoner && !(xr && vrui.menuOpen) && (xr || G.view === 'playing'));
 
   // send my pose 20x per second
-  if (inRoom && t - G.lastSend > 1 / 20) { G.lastSend = t; sendState(xr); }
+  if (inRoom && !cut.active && t - G.lastSend > 1 / 20) { G.lastSend = t; sendState(xr); }
 
   remote.update(dt, net.serverNow());
   for (const [id, p] of remote.players) if (p.head) voice.setPosition(id, p.head[0], p.head[1], p.head[2]);
@@ -715,6 +790,8 @@ function frame() {
   npcs.cull = xr ? 34 : 50;
   npcs.update(dt, net.serverNow(), camPos);
   cars.update(dt, net.serverNow(), camPos, driving.car, xr);
+  prisonView.update(dt, net.serverNow(), camPos, { prisoner: prison.prisoner, myBall: prison.ballHeld && xr, handPos: G.ballHandPos });
+  if (prisonView.active) prison.tick(dt);
   effects.update(dt);
   sky.position.copy(camPos);
   engine.followSun(camPos);
@@ -728,12 +805,15 @@ function frame() {
       timer: G.matchEnd ? fmt((G.matchResetAt - t)) : fmt(G.remaining), teams: MODES[G.room.mode].teams, teamScores: G.room.teamScores,
       kills: G.players.get(G.room.you)?.kills || 0, deaths: G.players.get(G.room.you)?.deaths || 0,
       prompt: G.prompt, death: G.death, driving: driving.active, cash: G.players.get(G.room.you)?.cash || 0, wanted: G.me.wanted,
-      rob: G.rob && t - G.rob.at < 0.9 ? G.rob : null, showBoard: G.showBoard || !!G.matchEnd, board: boardModel(),
+      rob: G.arrestBar ? arrestBarState(t) : G.rob && t - G.rob.at < 0.9 ? G.rob : null,
+      prison: prison.prisoner && !cut.active ? prison.panel(G.players.get(G.room.you)?.jail === 3) : null, sub: prison.sub && !cut.active ? prison.sub.text : null, showBoard: G.showBoard || !!G.matchEnd, board: boardModel(),
       matchEnd: G.matchEnd, matchResetIn: G.matchResetAt - t, showFps: settings.showFps, fps: G.fps, ping: Math.round(net.rtt * 1000),
       vignette: settings.vignette ? THREE.MathUtils.clamp(((G.vrSpeed || 0) - 1.5) / 5, 0, 0.85) : 0,
       teamText: MODES[G.room.mode].teams ? `RED ${G.room.teamScores[0]} : ${G.room.teamScores[1]} BLUE` : null
     };
-    if (xr) vrui.update(dt, st); else if (G.view === 'playing' || G.view === 'paused') hud.update(st);
+    if (cut.active) { st.prompt = null; st.rob = null; st.death = null; st.prison = null; st.sub = null; }
+    if (xr) vrui.update(dt, st); else if ((G.view === 'playing' || G.view === 'paused') && !cut.active) hud.update(st);
+    if (!xr) hud.show((G.view === 'playing' || G.view === 'paused') && !cut.active);
   }
   desk.endFrame();
   renderer.render(scene, camera);
@@ -793,13 +873,69 @@ function trackRealHeight() {
   }
 }
 
+// ------------------------------------------------------------------ arrest cutscene + prison helpers
+function runCutscene(dt, xr) {
+  if (xr) {
+    const s = vrInput.update();
+    if (s.right.pressed.b || s.right.pressed.a || s.left.pressed.a) { if (cut.requestSkip()) net.send({ type: 'skipCut' }); }
+  } else if (desk.hit('Space') || desk.hit('Enter') || desk.hit('KeyE')) { if (cut.requestSkip()) net.send({ type: 'skipCut' }); }
+  G.prompt = null;
+  if (!cut.update(dt)) endCutscene(xr);
+}
+function endCutscene(xr) {
+  if (pendingTp) { applyTp(pendingTp); pendingTp = null; }
+  if (!xr) { camera.position.set(0, walker.height - 0.05, 0); camera.rotation.set(0, 0, 0); }
+  prisonView.snapDoors();
+  hud.notice('🔒 YOU HAVE BEEN SENT TO PRISON', 3500); vrui.setNotice('SENT TO PRISON', 3);
+  prison.say('Find a way out! Talk to other inmates (E) to learn the escape routes. Stay out of restricted areas.', 8000);
+}
+function applyTp(m) {
+  if (driving.active) driving.exit();
+  const p = new THREE.Vector3(...m.p);
+  if (renderer.xr.isPresenting) pendingVRTeleport = { p, yaw: m.yaw || 0 }; else teleport(p, m.yaw || 0);
+  G.deskSafe = null; G.vrSafe = null;
+  prisonView.snapDoors();
+}
+function arrestBarState(t) {
+  const a = G.arrestBar, k = (performance.now() / 1000 - a.start) / a.dur;
+  if (k > 1.3) { G.arrestBar = null; return null; }
+  return { text: "🚔 YOU'RE BEING ARRESTED! RUN OR FIGHT BACK!", p: Math.min(1, k) };
+}
+const prevGrip = { left: false, right: false };
+function prisonInteract(dt, t, xr) {
+  if (!prison.prisoner || !G.me.alive) { if (prison.hold) prison.hold = null; return; }
+  const eye = camera.getWorldPosition(new THREE.Vector3()), dir = camera.getWorldDirection(new THREE.Vector3());
+  const hands = [];
+  if (xr) {
+    const s = vrInput.state;
+    for (const side of ['left', 'right']) {
+      const c = vrInput.get(side); if (!c) continue;
+      const held = !!s[side].held.grip;
+      hands.push({ side, pos: c.grip.getWorldPosition(new THREE.Vector3()), gripHeld: held, gripPressed: held && !prevGrip[side], gripReleased: !held && prevGrip[side] });
+      prevGrip[side] = held;
+    }
+    const bh = hands.find(h => h.side === prison.ballHand); G.ballHandPos = bh ? bh.pos : null;
+  }
+  const playing = xr || G.view === 'playing';
+  const key = { eDown: playing && desk.down('KeyE'), eHit: playing && desk.hit('KeyE'), clickHit: playing && desk.mouse.leftPressed };
+  const prompt = prison.update(dt, { xr, eye, dir, t, hands, key, myId: G.room.you });
+  if (prompt) G.prompt = prompt;
+  if (prison.progress) { G.rob = { ...prison.progress, at: t }; G.prompt = null; }
+}
+
 function clampWalker() {
+  if (inPrisonArea(walker.feet.x, walker.feet.z)) { walker.feet.x = THREE.MathUtils.clamp(walker.feet.x, PRISON.x0 + 0.6, PRISON.x1 - 0.6); walker.feet.z = THREE.MathUtils.clamp(walker.feet.z, PRISON.z0 + 0.6, PRISON.z1 - 0.6); if (walker.feet.y > 60) walker.feet.y = 60; return; }
   const H = map.worldHalf - 0.6;
   walker.feet.x = THREE.MathUtils.clamp(walker.feet.x, -H, H); walker.feet.z = THREE.MathUtils.clamp(walker.feet.z, -H, H);
   if (walker.feet.y > 60) walker.feet.y = 60;
 }
 function clampRig() {
   const head = headWorld(new THREE.Vector3()), H = map.worldHalf - 0.5;
+  if (inPrisonArea(head.x, head.z)) {
+    if (head.x < PRISON.x0 + 0.5) rig.position.x += PRISON.x0 + 0.5 - head.x; if (head.x > PRISON.x1 - 0.5) rig.position.x -= head.x - (PRISON.x1 - 0.5);
+    if (head.z < PRISON.z0 + 0.5) rig.position.z += PRISON.z0 + 0.5 - head.z; if (head.z > PRISON.z1 - 0.5) rig.position.z -= head.z - (PRISON.z1 - 0.5);
+    return;
+  }
   if (head.x < -H) rig.position.x += -H - head.x; if (head.x > H) rig.position.x -= head.x - H;
   if (head.z < -H) rig.position.z += -H - head.z; if (head.z > H) rig.position.z -= head.z - H;
 }
@@ -884,6 +1020,6 @@ async function start() {
   const unlock = () => { audio.unlock(); if (G.view === 'menu' || G.view === 'lobby') audio.startMusic(); };
   window.addEventListener('pointerdown', unlock, { once: false });
   window.addEventListener('keydown', unlock, { once: true });
-  window.__npcMap = npcs.map; window.__cc = { cars, driving, menuAction: (a) => menuAction(a), G, desk, vrui, vrInput, net, walker, vrMover, weapons, remote, renderer, rig, camera, city, map, world, pickups, scene };
+  window.__npcMap = npcs.map; window.__cc = { cars, driving, menuAction: (a) => menuAction(a), G, desk, vrui, vrInput, net, walker, vrMover, weapons, remote, renderer, rig, camera, city, map, world, pickups, scene, prison, prisonView, cut, npcs };
 }
 start();

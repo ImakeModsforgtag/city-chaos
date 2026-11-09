@@ -7,9 +7,9 @@ import { raySphere, rayCapsule } from '/shared/collision.js';
 import { HEAD_RADIUS, BODY_TOP, BODY_BOTTOM, BODY_RADIUS } from '/shared/constants.js';
 import * as audio from '../audio/audio.js';
 
-export const NPC_TYPE = { PED: 0, SHOP: 1, COP: 2 };
+export const NPC_TYPE = { PED: 0, SHOP: 1, COP: 2, GUARD: 3, PRISONER: 4, SWAT: 5 };
 export const NPC_STATE = { WALK: 0, PANIC: 1, HANDSUP: 2, DEAD: 3, AIM: 4, IDLE: 5 };
-export const NPC_NAMES = ['Pedestrian', 'Shopkeeper', 'Cop'];
+export const NPC_NAMES = ['Pedestrian', 'Shopkeeper', 'Cop', 'Prison guard', 'Prisoner', 'SWAT'];
 const HEAD_H = 1.55, DELAY = 0.16;
 const SKIN = [0xffdbac, 0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0x5c3a21];
 const SHIRTS = [0xff6b6b, 0x4ecdc4, 0xffe66d, 0x95e1d3, 0xf38181, 0xaa96da, 0xfcbad3, 0x6c5ce7, 0x00b894, 0xfd9644, 0x74b9ff, 0xe17055];
@@ -47,8 +47,9 @@ const bodyCache = new Map();
 function bodyGeometry(type, id) {
   const r = rng(id * 7919 + type * 104729 + 1);
   const skin = SKIN[Math.floor(r() * SKIN.length)];
-  const shirt = type === NPC_TYPE.COP ? 0x1f3a93 : SHIRTS[Math.floor(r() * SHIRTS.length)];
-  const pants = type === NPC_TYPE.COP ? 0x161b33 : PANTS[Math.floor(r() * PANTS.length)];
+  const uni = { [NPC_TYPE.COP]: [0x1f3a93, 0x161b33], [NPC_TYPE.GUARD]: [0x6c7a89, 0x2c3e50], [NPC_TYPE.PRISONER]: [0xff7f27, 0xff7f27], [NPC_TYPE.SWAT]: [0x1e272e, 0x111111] }[type];
+  const shirt = uni ? uni[0] : SHIRTS[Math.floor(r() * SHIRTS.length)];
+  const pants = uni ? uni[1] : PANTS[Math.floor(r() * PANTS.length)];
   const hair = HAIR[Math.floor(r() * HAIR.length)];
   const style = Math.floor(r() * 4), headStyle = Math.floor(r() * 3);
   const key = [type, skin, shirt, pants, hair, style, headStyle].join('|');
@@ -61,7 +62,7 @@ function bodyGeometry(type, id) {
     for (const sx of [-1, 1]) { b.geom(geo.sphere, trs(sx * 0.07, H + 0.04, fz, 0, 0, 0, 0.05, 0.06, 0.025), 0xffffff); b.geom(geo.sphere, trs(sx * 0.068, H + 0.035, fz - 0.02, 0, 0, 0, 0.026, 0.03, 0.012), 0x1d1442); }
     b.box(-0.045, H - 0.08, fz - 0.005, 0.045, H - 0.06, fz + 0.01, 0x7a2e2e);
     // torso
-    if (style === 0 || type === NPC_TYPE.COP) b.box(-0.22, 0.6, -0.14, 0.22, 1.25, 0.14, shirt);
+    if (style === 0 || uni) b.box(-0.22, 0.6, -0.14, 0.22, 1.25, 0.14, shirt);
     else if (style === 1) b.geom(geo.cyl, trs(0, 0.92, 0, 0, 0, 0, 0.2, 0.66, 0.16), shirt);
     else b.geom(geo.dodec, trs(0, 0.92, 0, 0, 0, 0, 0.26, 0.36, 0.2), shirt);
     b.box(-0.08, 1.25, -0.08, 0.08, 1.36, 0.08, skin); // neck
@@ -75,6 +76,21 @@ function bodyGeometry(type, id) {
       b.box(0.08, 1.08, -0.146, 0.15, 1.15, -0.141, 0xffd23f);                  // chest badge
       b.box(-0.2, 0.62, -0.17, 0.2, 0.66, 0.17, 0x111111);                      // duty belt
       for (const sx of [-1, 1]) b.box(sx * 0.12 - 0.05, H + 0.02, fz - 0.03, sx * 0.12 + 0.05, H + 0.07, fz - 0.02, 0x111111); // shades
+    } else if (type === NPC_TYPE.SWAT) {
+      b.geom(geo.half, trs(0, H + 0.06, 0, 0, 0, 0, 0.235, 0.2, 0.235), 0x111111);   // helmet
+      b.box(-0.17, H - 0.0, -0.24, 0.17, H + 0.08, -0.2, 0x2d3436);                  // goggles
+      b.box(-0.24, 0.72, -0.17, 0.24, 1.22, 0.17, 0x2d3436);                         // vest
+      b.box(-0.16, 0.95, -0.175, 0.16, 1.05, -0.17, 0xffffff);                       // SWAT patch
+    } else if (type === NPC_TYPE.GUARD) {
+      b.geom(geo.cyl, trs(0, H + 0.17, 0, 0, 0, 0, 0.21, 0.12, 0.21), 0x2c3e50);     // guard cap
+      b.box(-0.21, H + 0.1, -0.31, 0.21, H + 0.12, -0.05, 0x111111);
+      b.box(0.08, 1.08, -0.146, 0.15, 1.15, -0.141, 0xbdc3c7);                       // badge
+      b.box(-0.2, 0.62, -0.17, 0.2, 0.66, 0.17, 0x111111);                           // belt
+      b.box(0.19, 0.5, -0.04, 0.24, 0.66, 0.04, 0x111111);                           // baton
+    } else if (type === NPC_TYPE.PRISONER) {
+      b.box(-0.1, 1.0, -0.146, 0.1, 1.12, -0.141, 0xffffff);                         // number patch
+      if (r() < 0.5) b.geom(geo.half, trs(0, H + 0.04, 0.01, 0, 0, 0, 0.215, 0.12, 0.215), hair);
+      else b.box(-0.07, H - 0.06, fz - 0.015, 0.07, H - 0.035, fz, hair);             // mustache
     } else if (type === NPC_TYPE.SHOP) {
       b.box(-0.18, 0.62, -0.152, 0.18, 1.18, -0.142, 0xffffff);                 // apron
       b.geom(geo.half, trs(0, H + 0.08, 0, 0, 0, 0, 0.205, 0.14, 0.205), shirt); // cap
@@ -114,7 +130,7 @@ export class NPCs {
     const lh = new THREE.Mesh(handGeo, hm), rh = new THREE.Mesh(handGeo, hm);
     root.add(lh, rh);
     let gun = null;
-    if (type === NPC_TYPE.COP) { gun = createWeaponModel('pistol'); rh.add(gun); gun.position.set(0, -0.02, 0.03); }
+    if (type === NPC_TYPE.COP || type === NPC_TYPE.SWAT) { gun = createWeaponModel(type === NPC_TYPE.SWAT ? 'ar' : 'pistol'); rh.add(gun); gun.position.set(0, -0.02, 0.03); }
     root.visible = false;
     this.scene.add(root);
     return { id, type, root, body, legs, lh, rh, gun, buf: [], state: 0, phase: Math.random() * 10, bubble: null, closed: 0, alive: true, x: 0, y: 0, z: 0, yaw: 0 };
@@ -127,10 +143,11 @@ export class NPCs {
       seen.add(id);
       let n = this.map.get(id);
       if (!n) {
-        n = this.build(id, type); this.map.set(id, n);
-        if (type === NPC_TYPE.COP && flags) { n.donut = donutMesh(); n.lh.add(n.donut); n.donut.position.set(0, 0.02, -0.04); this.setBubble(n, '🍩 HEY! STOP!', '#ff7eb6'); n.bubbleUntil = performance.now() + 2500; }
+        n = this.build(id, type === NPC_TYPE.COP && (flags & 2) ? NPC_TYPE.SWAT : type); n.type = type; this.map.set(id, n);
+        if (type === NPC_TYPE.COP && (flags & 1)) { n.donut = donutMesh(); n.lh.add(n.donut); n.donut.position.set(0, 0.02, -0.04); this.setBubble(n, '🍩 HEY! STOP!', '#ff7eb6'); n.bubbleUntil = performance.now() + 2500; }
       }
       if (n.bubbleUntil && performance.now() > n.bubbleUntil) { n.bubbleUntil = 0; this.setBubble(n, null); }
+      n.flags = flags | 0;
       n.buf.push({ t: st, x, y, z, yaw, state });
       if (n.buf.length > 20) n.buf.shift();
       if (type === NPC_TYPE.SHOP && n.closed !== closed) { n.closed = closed; this.setBubble(n, closed ? 'CLOSED' : null, '#d62f4b'); }
@@ -143,6 +160,7 @@ export class NPCs {
     for (const [id, n] of this.map) if (!seen.has(id) && st) { this.scene.remove(n.root); this.map.delete(id); }
   }
   clear() { for (const n of this.map.values()) this.scene.remove(n.root); this.map.clear(); }
+  say(id, text, ms = 3000, bg = '#2c3e50') { const n = this.map.get(id); if (!n) return; this.setBubble(n, text, bg); n.bubbleUntil = performance.now() + ms; }
 
   setBubble(n, text, bg) {
     if (n.bubble) { n.root.remove(n.bubble); n.bubble.material.map.dispose(); n.bubble.material.dispose(); n.bubble = null; }
@@ -191,6 +209,7 @@ export class NPCs {
       const L = n.lh.position, R = n.rh.position;
       if (state === NPC_STATE.HANDSUP) { L.set(-0.28, 1.95 + Math.sin(n.phase * 3) * 0.03, -0.05); R.set(0.28, 1.95 + Math.cos(n.phase * 3) * 0.03, -0.05); }
       else if (state === NPC_STATE.PANIC) { L.set(-0.3, 1.75 + Math.sin(n.phase * 2) * 0.15, -0.1); R.set(0.3, 1.75 + Math.cos(n.phase * 2) * 0.15, -0.1); }
+      else if (n.flags & 16) { L.set(-0.18, 1.12 + Math.sin(n.phase * 4) * 0.04, -0.5); R.set(0.18, 1.12 + Math.cos(n.phase * 4) * 0.04, -0.5); } // cuffing someone
       else if (state === NPC_STATE.AIM) { R.set(0.12, 1.33, -0.48); L.set(0.0, 1.3, -0.4); n.rh.rotation.set(0, 0, 0); }
       else if (n.type === NPC_TYPE.SHOP) { L.set(-0.26, 1.05, -0.28); R.set(0.26, 1.05, -0.28); }
       else { L.set(-0.32, 0.92, -swing * 0.25); R.set(0.32, 0.92, swing * 0.25); if (n.gun) n.rh.rotation.set(0.9, 0, 0); }

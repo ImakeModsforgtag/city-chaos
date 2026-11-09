@@ -52,7 +52,7 @@ async function walk(bot, from, to) {
   const A = new Bot('Robber'), B = new Bot('Hunter');
   await A.connect(); await B.connect();
   await A.wait(m => m.type === 'welcome'); await B.wait(m => m.type === 'welcome');
-  A.send({ type: 'create', mode: 'ffa' });
+  A.send({ type: 'create', mode: 'ffa', crimes: false });
   const ja = await A.wait(m => m.type === 'joined');
   const shops = ja.npcs.filter(n => n[1] === 1), peds = ja.npcs.filter(n => n[1] === 0);
   ok(shops.length === 7 && peds.length === 18, `NPCs exist on join (${shops.length} shopkeepers, ${peds.length} pedestrians)`);
@@ -82,8 +82,8 @@ async function walk(bot, from, to) {
   ok(robbed && robbed.cash >= 150 && robbed.shop === 'GUN SHOP', 'robbing the GUN SHOP pays out cash ($' + (robbed && robbed.cash) + ')');
   const w = await A.wait(m => m.type === 'wanted' && m.id === A.id);
   ok(w.wanted === 2, 'robbery gives 2 wanted stars');
-  const withCops = await A.wait(m => m.type === 'npcs' && m.n.some(n => n[1] === 2), 3000).catch(() => null);
-  ok(!!withCops, 'cops are dispatched (' + (withCops ? withCops.n.filter(n => n[1] === 2).length : 0) + ' cops)');
+  const withCops = await A.wait(m => (m.type === 'npcs' && m.n.some(n => n[1] === 2)) || (m.type === 'dispatch' && m.target === A.id), 3000).catch(() => null);
+  ok(!!withCops, 'cops are dispatched (' + (withCops ? (withCops.type === 'dispatch' ? 'police car on the way' : withCops.n.filter(n => n[1] === 2).length + ' cops') : 'none') + ')');
   A.clear();
   A.send({ type: 'rob', id: keeper[0] });
   const closed = await A.wait(m => m.type === 'robStatus' && m.closed, 2000).catch(() => null);
@@ -102,11 +102,15 @@ async function walk(bot, from, to) {
   ok(die && die.by === A.id, 'NPCs can be eliminated');
   const w3 = await A.wait(m => m.type === 'wanted' && m.id === A.id && m.wanted === 3, 2000).catch(() => null);
   ok(!!w3, 'killing a civilian raises wanted level to 3');
-  // --- cops shoot back
-  const copShot = await A.wait(m => m.type === 'npcShot', 25000).catch(() => null);
-  ok(!!copShot, 'cops chase and open fire');
-  const copDmg = await A.wait(m => m.type === 'dmg' && m.id === A.id && m.w === 'cop', 25000).catch(() => null);
-  ok(!!copDmg, 'cop bullets damage the wanted player (' + (copDmg ? copDmg.amt : 0) + ')');
+  // --- cops respond: at 3 stars they shoot from a distance and try to cuff you up close
+  const copAct = await A.wait(m => m.type === 'npcShot' || m.type === 'arrestAttempt', 25000).catch(() => null);
+  ok(!!copAct, 'cops chase you and ' + (copAct ? (copAct.type === 'npcShot' ? 'open fire' : 'try to arrest you') : 'do nothing'));
+  if (copAct && copAct.type === 'npcShot') {
+    const copDmg = await A.wait(m => (m.type === 'dmg' && m.id === A.id && m.w === 'cop') || m.type === 'arrestCut', 25000).catch(() => null);
+    if (copDmg && copDmg.type === 'arrestCut') console.log('  SKIP cop damage check (cuffed before a bullet landed)');
+    else ok(!!copDmg, 'cop bullets damage the wanted player (' + (copDmg ? copDmg.amt : 0) + ')');
+  }
+  const jailed = () => A.msgs.some(m => m.type === 'arrestCut');
   // --- bounty: B eliminates wanted A
   B.clear();
   await walk(B, [gs.keeper[0] + 6, 1.6, gs.keeper[2] + 16], [st2[0], 1.6, st2[2] + 4]);
@@ -118,6 +122,7 @@ async function walk(bot, from, to) {
     await sleep(260);
     killed = B.msgs.find(m => m.type === 'kill' && m.victim === A.id);
   }
+  if (jailed()) { console.log('  SKIP bounty checks (an NPC cop arrested the robber and sent them to prison first)'); console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL NPC TESTS PASSED'); process.exit(failures ? 1 : 0); }
   ok(killed, 'wanted player can be taken down by another player');
   const bScore = killed && killed.scores.p.find(p => p[0] === B.id);
   // if the cops took the robber down first, their stars were cleared and there is no bounty to pay

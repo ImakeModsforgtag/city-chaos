@@ -1,6 +1,8 @@
 // CITY CHAOS - server-side vehicles: NPC traffic, hijacking, player driving, run-overs.
 // NPC cars follow lane loops and brake for anything in front of them. When a player hijacks a
 // car, that player's client drives it (instant response) and the server validates + relays it.
+import { roadRoute } from '../public/shared/roads.js';
+import { inPrisonArea } from '../public/shared/prison.js';
 import { NPC_TYPE, NPC_STATE } from './npcs.js';
 
 const NPC_CARS = 10;
@@ -9,9 +11,7 @@ const HIJACK_RANGE = 4.4;      // meters from the car's center
 const MAX_PLAYER_SPEED = 34;   // m/s anti-cheat cap for player-driven cars
 const ABANDON_RESPAWN = 45;    // seconds an empty car waits before rejoining traffic
 const CAR_HALF_L = 2.15, CAR_HALF_W = 1.0;
-const GRID = [-112, -56, 0, 56, 112];      // road center lines (x and z)
 const POLICE_COLOR = 8;
-const snapG = (v) => GRID.reduce((a, b) => Math.abs(b - v) < Math.abs(a - v) ? b : a);
 const r2 = (v) => Math.round(v * 100) / 100;
 
 export const DRIVER = { NPC: 0, PLAYER: 1, NONE: 2 };
@@ -43,6 +43,10 @@ export class VehicleManager {
       this.placeOnLoop(car); car.yaw = this.loopYaw(car);
       this.cars.push(car);
     }
+    // the prison van (vehicle escape route): only a prisoner holding the VAN KEYS can drive it
+    { const [x, y, z, yaw] = this.map.prison.van;
+      this.vanId = 9000;
+      this.cars.push({ id: this.vanId, color: 10, van: true, home: [x, y, z, yaw], x, y, z, yaw, speed: 0, driver: DRIVER.NONE, pid: 0, siren: false, emptySince: 0, hits: new Map(), lastHonk: 0, waitSince: 0, pushUntil: 0 }); }
     // police cars parked in the station lot (only cops can drive them without getting wanted)
     this.nextId = NPC_CARS + 1;
     for (const [x, y, z, yaw] of this.map.policeLot) {
@@ -55,36 +59,7 @@ export class VehicleManager {
   dispatchCount() { return this.cars.filter(c => c.route).length; }
   pendingFor(p) { return this.cars.filter(c => c.route && c.target === p.id).length; }
 
-  // road route (Manhattan path along road center lines), then shifted into the right-hand lane
-  route(sx, sz, tx, tz) {
-    const clampR = (v) => Math.max(-112, Math.min(112, v));
-    const sH = Math.abs(sz - snapG(sz)) <= Math.abs(sx - snapG(sx));
-    const S = sH ? [clampR(sx), snapG(sz)] : [snapG(sx), clampR(sz)];
-    const eH = Math.abs(tz - snapG(tz)) <= Math.abs(tx - snapG(tx));
-    const E = eH ? [clampR(tx), snapG(tz)] : [snapG(tx), clampR(tz)];
-    let pts;
-    if (sH && !eH) pts = [S, [E[0], S[1]], E];
-    else if (!sH && eH) pts = [S, [S[0], E[1]], E];
-    else if (sH && eH) {
-      if (S[1] === E[1]) pts = [S, E];
-      else { const g = GRID.reduce((a, b) => (Math.abs(b - S[0]) + Math.abs(b - E[0]) < Math.abs(a - S[0]) + Math.abs(a - E[0]) ? b : a)); pts = [S, [g, S[1]], [g, E[1]], E]; }
-    } else {
-      if (S[0] === E[0]) pts = [S, E];
-      else { const g = GRID.reduce((a, b) => (Math.abs(b - S[1]) + Math.abs(b - E[1]) < Math.abs(a - S[1]) + Math.abs(a - E[1]) ? b : a)); pts = [S, [S[0], g], [E[0], g], E]; }
-    }
-    pts = pts.filter((p, i) => i === 0 || Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > 0.5);
-    // lane offset (right side, 3m) with mitered corners
-    const R = (d) => [-d[1], d[0]];
-    const nrm = (x, z) => { const l = Math.hypot(x, z) || 1; return [x / l, z / l]; };
-    return pts.map((p, i) => {
-      const din = i > 0 ? nrm(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : null;
-      const dout = i < pts.length - 1 ? nrm(pts[i + 1][0] - p[0], pts[i + 1][1] - p[1]) : null;
-      let o;
-      if (din && dout) { const dot = din[0] * dout[0] + din[1] * dout[1]; const a = R(din), b = R(dout); o = 1 + dot < 0.2 ? [b[0] * 3, b[1] * 3] : [(a[0] + b[0]) * 3 / (1 + dot), (a[1] + b[1]) * 3 / (1 + dot)]; }
-      else { const r = R(din || dout); o = [r[0] * 3, r[1] * 3]; }
-      return [p[0] + o[0], p[1] + o[1]];
-    });
-  }
+  route(sx, sz, tx, tz) { return roadRoute(sx, sz, tx, tz); }
 
   // send a police car (with 2 cops inside) from the station to a wanted player
   dispatch(p) {
@@ -93,7 +68,7 @@ export class VehicleManager {
     const route = this.route(ex, ez, p.pose.h[0], p.pose.h[2]);
     if (route.length < 2) return false;
     const [x, z] = route[0];
-    const car = { id: this.nextId++, color: POLICE_COLOR, police: true, temp: true, x, y: 0, z, yaw: Math.atan2(-(route[1][0] - x), -(route[1][1] - z)),
+    const car = { id: this.nextId++, color: p.wanted >= 3 ? 9 : POLICE_COLOR, police: true, temp: true, swat: p.wanted >= 4, x, y: 0, z, yaw: Math.atan2(-(route[1][0] - x), -(route[1][1] - z)),
                   speed: 4, driver: DRIVER.NPC, pid: 0, siren: true, route, ri: 1, target: p.id, emptySince: 0, hits: new Map(), lastHonk: 0, waitSince: 0, pushUntil: 0, born: this.room.now() };
     this.cars.push(car);
     this.room.broadcast({ type: 'dispatch', id: car.id, target: p.id });
@@ -108,8 +83,8 @@ export class VehicleManager {
       car.speed = 0; car.route = null; car.driver = DRIVER.NONE; car.siren = false; car.emptySince = t;
       if (target && target.alive && target.wanted) {
         const lx = Math.cos(car.yaw), lz = -Math.sin(car.yaw);
-        this.room.npcs.spawnCopAt(car.x - lx * 2, car.z - lz * 2, target, {});
-        this.room.npcs.spawnCopAt(car.x + lx * 2, car.z + lz * 2, target, {});
+        this.room.npcs.spawnCopAt(car.x - lx * 2, car.z - lz * 2, target, { swat: car.swat });
+        this.room.npcs.spawnCopAt(car.x + lx * 2, car.z + lz * 2, target, { swat: car.swat });
         this.room.broadcast({ type: 'copsOut', id: car.id });
       }
       return;
@@ -172,6 +147,8 @@ export class VehicleManager {
   onHijack(p, id) {
     const car = this.cars.find(c => c.id === id);
     if (!car || !p.alive || !p.pose || p.inCar) return;
+    if (car.van && !(p.jail && p.jail.items.has('VANKEYS'))) return this.room.sendTo(p, { type: 'pMsg', text: 'The prison van is locked. You need the 🔑 VAN KEYS.' });
+    if (p.holding || (p.jail && !car.van)) return;
     if (car.driver === DRIVER.PLAYER) return;
     const [hx, hy, hz] = p.pose.h;
     if (Math.hypot(hx - car.x, hz - car.z) > HIJACK_RANGE || Math.abs(hy - car.y) > 3.5) return;
@@ -210,7 +187,8 @@ export class VehicleManager {
     if (!car || car.pid !== p.id || !Array.isArray(c) || c.length !== 6 || c[0] !== car.id) return;
     const [, x, y, z, yaw, speed] = c.map(Number);
     if (![x, y, z, yaw, speed].every(Number.isFinite)) return;
-    if (Math.abs(x) > 125 || Math.abs(z) > 125 || y < -8 || y > 40) return;
+    if ((Math.abs(x) > 125 || Math.abs(z) > 125) && !(car.van && inPrisonArea(x, z))) return;
+    if (y < -8 || y > 40) return;
     const t = this.room.now();
     const dt = Math.max(0.03, t - (car.lastUpdate || t - 0.05));
     const moved = Math.hypot(x - car.x, z - car.z);
@@ -298,6 +276,7 @@ export class VehicleManager {
       this.placeOnLoop(car);
     }
   }
+  sendHome(car) { const [hx, hy, hz, hyaw] = car.home; Object.assign(car, { x: hx, y: hy, z: hz, yaw: hyaw, speed: 0, siren: false, driver: DRIVER.NONE, pid: 0 }); }
   cleanup() { this.cars = this.cars.filter(c => !c.remove); }
   loopYaw(car) { const loop = this.loops[car.loop]; const seg = loop.segs.find(g => car.s >= g.start && car.s < g.start + g.len) || loop.segs[0]; return Math.atan2(-(seg.b[0] - seg.a[0]), -(seg.b[1] - seg.a[1])); }
 

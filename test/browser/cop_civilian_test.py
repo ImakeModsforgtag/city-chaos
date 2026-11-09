@@ -62,12 +62,14 @@ async def main():
         await A.screenshot(path='/tmp/shots/r5_arrest_prompt.png')
         print('A prompt near B:', await A.evaluate('__cc.G.prompt'))
         await A.keyboard.press('KeyE'); await A.wait_for_timeout(900)
-        print('B alive after arrest:', await B.evaluate('__cc.G.me.alive'), ' death by:', await B.evaluate('__cc.G.death && __cc.G.death.by'))
+        await B.wait_for_timeout(800)
+        print('B arrested (2 stars -> station holding cell):', await B.evaluate('(() => { const f = __cc.walker.feet; return __cc.map.holding.cells.some(c => Math.hypot(c[0] - f.x, c[2] - f.z) < 1.5); })()'), '| B weapons:', await B.evaluate('__cc.weapons.slots.length'))
         print('A feed:', (await A.inner_text('#killfeed')).replace('\n',' | '))
         await B.screenshot(path='/tmp/shots/r6_arrested.png')
         # donut / dispatch cops visible?
         await A.wait_for_timeout(1500)
         print('donut cops on client:', await A.evaluate('[...__npcMap.values()].filter(n => n.donut).length'), ' cops:', await A.evaluate('[...__npcMap.values()].filter(n => n.type === 2).length'))
+        await B.wait_for_timeout(12500)  # wait for release from the holding cell (role changes are locked while arrested)
         # pause menu role switch for B
         await B.keyboard.press('Escape'); await B.wait_for_timeout(400)
         await B.evaluate("document.querySelector('#pause .role-seg button[data-val=cop]').click()"); await B.wait_for_timeout(1500)

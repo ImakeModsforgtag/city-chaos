@@ -51,9 +51,9 @@ async function walk(bot, from, to) {
   const A = new Bot('Jacker'), B = new Bot('Walker');
   await A.connect(); await B.connect();
   await A.wait(m => m.type === 'welcome'); await B.wait(m => m.type === 'welcome');
-  A.send({ type: 'create', mode: 'ffa' });
+  A.send({ type: 'create', mode: 'ffa', crimes: false });
   const ja = await A.wait(m => m.type === 'joined');
-  ok(ja.cars && ja.cars.filter(c => !c[9]).length === 10 && ja.cars.filter(c => !c[9]).every(c => c[6] === 0), 'NPC traffic exists on join (10 cars with NPC drivers)');
+  ok(ja.cars && ja.cars.filter(c => !c[9] && c[8] !== 10).length === 10 && ja.cars.filter(c => !c[9] && c[8] !== 10).every(c => c[6] === 0), 'NPC traffic exists on join (10 cars with NPC drivers)');
   A.clear(); const s1 = (await A.wait(m => m.type === 'npcs')).c; await sleep(1500); A.clear(); const s2 = (await A.wait(m => m.type === 'npcs')).c;
   const moved = s1.map((c, i) => Math.hypot(s2[i][1] - c[1], s2[i][3] - c[3]));
   ok(moved.filter(d => d > 5).length >= 8, 'cars drive along the roads (' + moved.filter(d => d > 5).length + ' of 10 moved >5m)');

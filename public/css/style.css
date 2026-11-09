@@ -148,8 +148,16 @@ input[type=range] { width: 200px; accent-color: var(--pink); }
   .bigcode { font-size: 44px; }
 }
 #cash { color: #7dff9a; font-size: 18px; }
-#wanted { color: #ffd23f; font-size: 24px; letter-spacing: 2px; animation: pulse 0.8s infinite alternate; }
+#wanted { position: absolute; top: 62px; left: 50%; transform: translateX(-50%); text-align: center; font-size: 34px; letter-spacing: 3px; -webkit-text-stroke: 1.5px var(--ink); }
+#wanted .on { color: #ffd23f; animation: pulse 0.8s infinite alternate; }
+#wanted .off { color: rgba(255,255,255,0.25); }
+#wanted i { display: block; font-style: normal; font-size: 15px; letter-spacing: 1px; color: #fff; -webkit-text-stroke: 0; background: rgba(160,0,40,0.75); border-radius: 8px; padding: 1px 10px; margin-top: 2px; }
 #wanted:empty { display: none; }
+#prisonpanel { position: absolute; top: 14px; left: 14px; background: rgba(29,20,66,0.78); border: 3px solid var(--ink); border-radius: 14px; padding: 8px 14px; font-size: 16px; line-height: 1.45; max-width: 330px; }
+#prisonpanel b { color: #ffd23f; } #prisonpanel .alarm { color: #ff5d5d; animation: pulse 0.4s infinite alternate; font-weight: bold; }
+#prisonpanel .items { font-size: 22px; letter-spacing: 3px; } #prisonpanel .hint { color: #b8b0e0; font-size: 14px; }
+#subtitle { position: absolute; top: 30%; left: 50%; transform: translateX(-50%); max-width: 70vw; text-align: center; background: rgba(0,0,0,0.72); border-radius: 12px; padding: 8px 18px; font-size: 20px; }
+#subtitle b { color: #ffd23f; }
 @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.15); color: #ff5d5d; } }
 #robbar { position: absolute; left: 50%; top: 66%; transform: translateX(-50%); text-align: center; background: rgba(29,20,66,0.75); border: 3px solid var(--ink); border-radius: 14px; padding: 8px 16px; min-width: 300px; }
 #robtext { font-size: 20px; margin-bottom: 6px; }

@@ -127,12 +127,12 @@ const sp = (b) => [b.spawnP[0], b.spawnP[1] + 1.45, b.spawnP[2]];
     R.pose(...gStand); C.pose(...C.at); await sleep(150);
     if (C.msgs.some(m => m.type === 'dispatch' && m.target === R.id)) sawDispatch = true;
     if (C.msgs.some(m => m.type === 'npcs' && m.n.some(n => n[1] === 2 && n[8] === 1))) sawDonut = true;
-    C.msgs = C.msgs.filter(m => m.type === 'dispatch');
+    C.msgs = C.msgs.filter(m => m.type === 'dispatch' || m.type === 'copsOut');
   }
   ok(sawDispatch || sawDonut, `cops respond to the robbery (${sawDispatch ? 'police car dispatched' : ''}${sawDispatch && sawDonut ? ' + ' : ''}${sawDonut ? 'donut-shop cop' : ''})`);
   if (sawDispatch) {
-    C.clear(); const d = await C.wait(m => m.type === 'npcs' && m.c.some(c => c[9] === 1 && c[10] === 1 && c[6] === 0), 2000).catch(() => null);
-    ok(!!d, 'the dispatched police car drives with its siren on');
+    const d = C.msgs.find(m => m.type === 'copsOut') || await C.wait(m => (m.type === 'npcs' && m.c.some(c => c[9] === 1 && c[10] === 1 && c[6] === 0)) || m.type === 'copsOut', 4000).catch(() => null);
+    ok(!!d, 'the dispatched police car drives with its siren on' + (d && d.type === 'copsOut' ? ' (already arrived, cops jumped out)' : ''));
   }
 
   // ---- arrest
@@ -140,17 +140,29 @@ const sp = (b) => [b.spawnP[0], b.spawnP[1] + 1.45, b.spawnP[2]];
   if (!rAlive) console.log('  SKIP arrest check (the NPC cops got the robber first this run)');
   else {
     await walk(C, C.at, [gStand[0] + 1.2, 1.6, gStand[2] + 0.5]);
-    C.clear(); C.send({ type: 'arrest', id: R.id });
-    const k = await C.wait(m => m.type === 'kill' && m.victim === R.id, 1500).catch(() => null);
-    ok(k && k.w === 'arrest' && k.killer === C.id, 'a cop can arrest a wanted player up close');
+    C.clear(); R.clear(); C.send({ type: 'arrest', id: R.id });
+    const k = await C.wait(m => m.type === 'arrested' && m.id === R.id, 1500).catch(() => null);
+    ok(k && k.by === C.id && k.prison === false, 'a cop can arrest a wanted player up close (under 3 stars: holding cell)');
     const sc = k && k.scores.p.find(q => q[0] === C.id);
     ok(sc && sc[3] >= 400, 'arresting pays a double bounty ($' + (sc && sc[3]) + ')');
+    const short = await R.wait(m => m.type === 'arrestShort', 1500).catch(() => null);
+    const tp = await R.wait(m => m.type === 'tp', 1500).catch(() => null);
+    ok(short && tp && map.holding.cells.some(c => Math.hypot(c[0] - tp.p[0], c[2] - tp.p[2]) < 0.5), 'short arrest puts you in the police station holding cell');
+    if (tp) R.life = tp.life;
+    const inv = await R.wait(m => m.type === 'inv', 1500).catch(() => null);
+    ok(inv && inv.slots.length === 0, 'weapons are taken away while arrested');
+    const rel = await R.wait(m => m.type === 'released', 16000).catch(() => null);
+    const tp2 = rel && await R.wait(m => m.type === 'tp', 1500).catch(() => null);
+    if (tp2) R.life = tp2.life;
+    const inv2 = rel && await R.wait(m => m.type === 'inv' && m.slots.length > 0, 1500).catch(() => null);
+    ok(rel && tp2 && inv2, 'released from the holding cell after a short time, weapons returned');
+    if (tp2) { R.pose(tp2.p[0], tp2.p[1] + 1.45, tp2.p[2]); C.at = [tp2.p[0] + 1.5, 1.6, tp2.p[2]]; C.pose(...C.at); }
   }
   // can't arrest someone who isn't wanted
-  await sleep(3500); R.clear();
+  await sleep(500); R.clear();
   R.pose(C.at[0] + 1, 1.6, C.at[2]); await sleep(150);
   C.clear(); C.send({ type: 'arrest', id: R.id });
-  const k2 = await C.wait(m => m.type === 'kill' && m.victim === R.id, 800).catch(() => null);
+  const k2 = await C.wait(m => m.type === 'arrested' && m.id === R.id, 800).catch(() => null);
   ok(!k2, 'innocent (not wanted) players can\'t be arrested');
 
   // ---- switching role

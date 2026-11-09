@@ -114,10 +114,10 @@ To update later: edit files, then on your Netlify site page go to **Deploys** an
 | Control | Action |
 |---|---|
 | **Hands on the ground + push** | Move like a gorilla. Swing arms back to run, shove down to jump, slap walls to climb. |
-| **Grip (either hand)** | Grab a weapon, ammo or health near your hand. Grab a car to hijack it. As a Cop, grab a wanted player to arrest them |
+| **Grip (either hand)** | Grab a weapon, ammo or health near your hand. Grab a car to hijack it. As a Cop, grab a wanted player to arrest them. In prison: **hold grip** on objects, grip inmates to talk, grab and throw the basketball |
 | **Right trigger** | Shoot (hold for automatic weapons) |
 | **A** | Reload |
-| **B** | Switch weapon |
+| **B** | Switch weapon · skip the arrest cutscene |
 | **X** | Jump boost (when touching something / standing). In a police car: siren on/off |
 | **Y** | Menu (laser pointer + right trigger to click) |
 | **Left stick click (hold)** | Scoreboard |
@@ -133,12 +133,13 @@ Your **left wrist** shows health, timer and score. The **gun** shows its ammo.
 | Mouse | Look |
 | Left click | Shoot |
 | R | Reload |
-| E | Pick up · hijack a car / get out · arrest (Cop) |
+| E | Pick up · hijack a car / get out · arrest (Cop) · talk to inmates · **hold E** to use prison objects |
 | L | Police car siren and lights (Cop) |
 | Space | Jump (hold against a ledge to climb up) |
 | 1 / 2 / 3, mouse wheel, Q | Switch weapon |
 | Tab | Scoreboard |
 | Esc | Pause menu |
+| Space / Enter | Skip the arrest cutscene |
 
 Walk into a ladder to climb it.
 
@@ -187,20 +188,39 @@ Switching role mid match respawns you right away (no death counted).
 3. They put their hands up ("DON'T SHOOT!") and a progress bar fills. Hold your aim for about 4 seconds.
 4. You get **$150 to $500**, the store closes for about 75 seconds, and you get **2 wanted stars ★★**.
 
-**Wanted stars and cops**
+**Wanted stars (up to 5 ★★★★★, shown at the top of your screen)**
 | Crime | Stars |
 |---|---|
 | Robbing a store | +2 |
-| Eliminating a pedestrian or shopkeeper | +1 |
+| Shooting a civilian (first shot) / eliminating one | +1 / +1 |
 | Shooting a cop | +1 (eliminating one adds another) |
 | Carjacking | +1 |
 | Stealing a police car | +2 |
+| Attacking or eliminating an innocent player in public (Free For All, with witnesses nearby) | +1 |
+| Destruction (rocket explosions with witnesses nearby) | +1 |
+| Resisting arrest (running away or shooting while being cuffed) | +1 |
+| Escaping from prison | straight to 5 |
 
-- Cops (blue uniforms) come after you: about 2 per star, up to 8 at once. They shoot when they can see you.
+| Level | What the police do |
+|---|---|
+| ★ | Investigate: cops walk up to check on you, but don't shoot (unless you shot at them) |
+| ★★ | Chase: cops chase you and open fire |
+| ★★★ | Arrest: stronger police SUVs, cops close in and try to **cuff you** (3 seconds, run or shoot to resist) |
+| ★★★★ | SWAT joins: armored SWAT officers with rifles (more health, more damage) |
+| ★★★★★ | Maximum response: up to 12 officers, mostly SWAT |
+
+Crimes against players and "destruction" only count when somebody sees it (a pedestrian, shopkeeper or cop nearby), and never in Team Deathmatch, so normal deathmatch fights aren't punished.
+
+- Cops come after you in police cars (siren on), out of the donut shop, or on foot.
 - **Lose the cops:** stay out of their sight for 25 seconds to drop a star. Rooftops and buildings help (cops can't climb).
 - **Dying clears your stars.**
 - **Bounty:** eliminating a wanted player pays you $100 per star they had.
 - Your cash and stars show on the top bar (desktop) and on your left wrist (VR). Cash is on the scoreboard.
+
+**Getting arrested**
+- **Under 3 stars:** a short arrest. You spend about 12 seconds in the police station **holding cell** (weapons taken), then you're released out front.
+- **3 stars or more:** you're going to **prison** (see the next section).
+- A cop *player* can arrest you (E or grip), and so can NPC cops at 3+ stars.
 
 **Pedestrians** walk the sidewalks and run away when shooting starts nearby. Eliminated NPCs come back after a short time.
 
@@ -210,6 +230,41 @@ Switching role mid match respawns you right away (no death counted).
 - **Drive (desktop):** W/S gas and reverse, A/D steer, Space brake, H honk, E get out. Mouse looks around the car.
 - **Drive (VR):** you sit in the driver seat. Right trigger gas, left trigger brake/reverse, left stick steer, A honk, B get out.
 - Running people over hurts them (and NPCs). Abandoned cars stay parked, then rejoin traffic after a while.
+
+---
+
+## 8b. Prison: arrest cutscene and escaping
+
+**The arrest cutscene (3+ stars).** Real 3D scenes, not pictures:
+1. **Capture:** you freeze, your weapons are taken, two officers walk up and cuff you, and one walks you to the police car.
+2. **The ride:** you sit in the back seat while the car drives real city streets with lights flashing, siren and police radio chatter. Desktop gets camera angles (back seat, side window, roadside, chase); VR keeps you in a fixed seat in the back, so the game never turns your head for you.
+3. **Arrival:** the prison gate opens, guards watch, the gate closes behind you, and you're walked inside.
+4. **"6 HOURS LATER..."** You wake up on your cell bed: **YOU HAVE BEEN SENT TO PRISON.**
+Skip it any time: **SPACE** (desktop) or **B** (VR).
+
+**Inside the prison** (a whole new low-poly map, south of the city): cell block with 10 cells and showers, cafeteria, yard with a basketball court, medical room, laundry, workshop, admin building (security checkpoint, guard offices, control room, armory, staff lockers), sally port with the prison van, 4 guard towers with searchlights, security cameras, an electric fence on top of the walls, maintenance tunnels and an old sewer underneath. You wear an orange jumpsuit and have no weapons.
+
+- **Schedule:** Free time, Breakfast, Yard time, Work duty (laundry + workshop open), Free time, then **LOCKDOWN** (be in your cell when the doors close). Announcements play over the speakers.
+- **Guards** patrol, investigate noises (digging, cutting, tools), and chase anyone in a restricted area. **Cameras** sweep and sound the alarm. **Tower guards** watch the walls and roofs. Get caught and you're dragged back to your cell and lose everything you were carrying.
+- **Restricted areas:** admin building, sally port, rooftops, near the walls, maintenance areas, tunnels and sewer, and the laundry and workshop outside work duty. Being out of your cell during lockdown counts too.
+- **Talk to inmates** (E, or grip in VR). Each one knows something about a way out. Two of them have **missions**: BIG MIKE wants you to sink 3 baskets, DOC wants a food tray.
+- **Interact:** look at an object and **hold E** (desktop) or **hold grip** with your hand on it (VR). A ✋ marker shows what you can use.
+- **Basketball:** E or grip to pick up, click to shoot (desktop), or let go of grip while swinging your arm to throw (VR).
+
+**Five ways out (each takes several steps):**
+| Route | Steps |
+|---|---|
+| 🪛 Maintenance | Screwdriver from the workshop (work duty) → unscrew the maintenance panel in the laundry → down the ladder into the tunnels → bolt cutters from the tunnel storage room → cut the tunnel gate → climb out the manhole outside the walls |
+| 🥄 Sewer | Food tray at breakfast → give it to DOC (he tells you about the loose shower tile) → swipe a spoon in the cafeteria (don't let a guard see) → dig out the tile (loud, 10 s) → in the sewer, turn **both** valves to drain the water and open the grate → climb out past the wall |
+| 🦺 Guard disguise | Sink 3 baskets → BIG MIKE gives you the drawer code → keycard from the medical drawer → keycard into the admin building and staff lockers → put on a guard uniform (cameras ignore you, but don't hang around a guard for long) → badge out through the staff gate |
+| 🪢 Rooftop | Tie bedsheets into a rope in the laundry (work duty) → get on the workshop roof (unscrew the roof hatch, or climb in VR) → cut the fence power at the fuse box (45 s, guards hear it) → throw the rope over the wall |
+| 🚐 Vehicle | Keycard → control room: grab the van keys and press OPEN MAIN GATE (open 30 s, the alarm goes off 8 s later) → drive the prison van out of the gate |
+
+Unique items (screwdriver, bolt cutters, keycard, van keys) exist once per room; if someone gets caught, theirs goes back.
+
+**Escape:** "PRISON ESCAPE SUCCESSFUL!", your normal clothes and weapons come back, you're dropped in the city with **5 stars** and a full police pursuit. Hide and lose them. Get caught again with 3+ stars and it's straight back to prison.
+
+**Multiplayer:** every player has their own stars and their own arrest. Friends arrested together share the prison (up to 8 per room), see each other, and the guards, alarms, doors and escape progress are the same for everyone, so you can split the work (one opens the gate from the control room, the other drives the van; one turns each sewer valve).
 
 ---
 
@@ -230,12 +285,16 @@ city-chaos/
 ├── server/                 BACKEND (Node.js)
 │   ├── index.js            web server + WebSockets, room codes, reconnects
 │   ├── room.js             authoritative game: hits, damage, ammo, pickups, kills, respawns, modes
-│   └── npcs.js             pedestrians, shopkeepers, cops, robbery, wanted stars
+│   ├── npcs.js             pedestrians, shopkeepers, cops, SWAT, robbery, wanted stars, NPC arrests
+│   ├── vehicles.js         NPC traffic, police cars, dispatch, the prison van
+│   └── prison.js           arrests, cutscene timer, prison schedule, guards, cameras, alarms, escapes, basketball
 ├── public/                 FRONTEND (what the browser downloads; this folder alone can go on Netlify)
 │   ├── index.html, css/style.css
 │   ├── config.js           game server address (only needed when the website is hosted separately)
 │   ├── shared/             used by BOTH server and browser
 │   │   ├── map.js          the whole city (buildings, stairs, ladders, pickups, spawns)
+│   │   ├── prison.js       the prison map + all escape objects, zones, cameras, guard routes
+│   │   ├── roads.js        road routing (police cars + the cutscene car)
 │   │   ├── collision.js    collision + raycasting (movement and bullet hits)
 │   │   ├── weapons.js      weapon stats
 │   │   └── constants.js    health, hitboxes, modes, cosmetics list
@@ -247,6 +306,7 @@ city-chaos/
 │   ├── js/net/             networking (network.js) + voice chat (voice.js)
 │   ├── js/player/          avatars, other players (interpolation), NPC visuals
 │   ├── js/ui/              menus, HUD, settings, desktop input
+│   ├── js/prison/          prison visuals, arrest cutscene, prison interactions
 │   ├── js/audio/           synthesized sound effects + music
 │   └── vendor/three/       Three.js (bundled, no internet CDN needed)
 ├── test/                   automated tests
@@ -259,11 +319,13 @@ city-chaos/
 ## 11. What was tested, and what still needs your real headset
 
 **Tested and passing:**
+- **Prison (77 more checks, `test/server-test-6.mjs`):** wanted levels up to 5, NPC cops cuffing you at 3 stars and resisting arrest, SWAT at 4-5, no shooting at 1 star, police SUVs, prison vs holding cell, the cutscene freezing you and taking weapons, skipping it, waking in your own cell, separate cells for friends, schedule + lockdown doors, guards chasing and catching, noises, camera alarms, looped cameras, the electric fence, escape progress shared between players, and every step of all five escape routes (including a real basketball throw scoring), then being caught again.
 - **Server (about 89 automated checks with real WebSocket clients, all passing):** room creation (6-character codes), joining by code (case-insensitive), wrong-code and room-full (9th player) errors, 8 players in one room, position sync, server hit detection with headshots and body shots, ammo tracking, fire-rate cheat blocked, fake-origin and wrong-weapon cheats blocked, bullets blocked by walls, eliminations, kill feed, scores, 5-second respawn, pickups (range-checked, disappear for everyone), reload timing, weapon switching, reconnect with the same player and score, public quick match, Team Deathmatch 4 v 4 split, rocket projectile + splash damage, match ending at the kill limit and auto-restarting, NPCs walking, robbing a store (progress, cash payout, store closing), wanted stars, cops spawning and shooting, NPC hit detection and eliminations, bounty, stars clearing on death, NPC traffic and hijacking, and the Cop/Civilian roles (cop spawns at the station, police cars and siren, cops can't rob, a nearby cop blocks robberies, robbery alerts, police dispatch cars driving the roads, donut-shop cops, arrests with a double bounty, no arresting innocent players, switching roles). Run them with `npm start` in one window and `npm test` in another.
 - **Desktop in Chrome (two real browser windows playing together):** menus, create room, invite link, join, WASD movement, jumping, shooting a friend until eliminated with server-confirmed headshots, kill feed, death screen, respawn, scoreboard, reload, pickup with E, customization preview, team name tags, reconnecting after a dropped connection, robbing the GUN SHOP through the front door (clerk hands up, progress bar, cash, wanted stars) and cops arriving and taking down the robber.
 - **Cop vs Civilian in two browser windows and in emulated VR:** choosing Cop on the menu, spawning at the station, driving a police car with the siren and flashing lights, a Civilian robbing the GUN SHOP, the cop seeing the alert and the red star badge, the arrest prompt and arresting (E on desktop, grip in VR), the VR menu role button, and switching role from the pause menu.
 - **VR on an emulated Meta Quest 3** (Meta's official WebXR emulator, IWER): entering VR, both controllers detected, Gorilla movement (hands hold you up, pushing back moves you forward, shoving down lifts you, letting go mid-push launches you), snap turn, trigger shooting, A reload, Y menu with scoreboard, grip-to-grab pickups, other players seeing you as a VR player.
-- **Performance:** about 40 draw calls and 60,000 triangles per frame, well inside Quest 3 limits.
+- **Arrest + prison in the browser and emulated Quest 3:** robbing to 4 stars, a cop player arresting you, the whole cutscene (screenshots of every scene), skipping with SPACE and with B in VR, VR back seat ride (head locked to the seat), waking in the cell, walking out, talking to inmates, basketball, hold-E and hold-grip interactions, guards catching you, camera alarms.
+- **Performance:** city about 35-50 draw calls and 60,000 triangles; prison about 65-100 draw calls and 17,000 triangles (only one of them is drawn at a time). Well inside Quest 3 limits.
 
 **Not yet tested (I don't have a physical headset or a second real device):**
 - How the Gorilla movement *feels* on a real Quest 3 at full frame rate. The **Arm strength** setting is there to tune it.

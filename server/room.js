@@ -5,6 +5,8 @@ import { buildMap } from '../public/shared/map.js';
 import { CollisionWorld, raySphere, rayCapsule } from '../public/shared/collision.js';
 import { NPCManager, rayNpc } from './npcs.js';
 import { VehicleManager } from './vehicles.js';
+import { PrisonManager } from './prison.js';
+import { inPrisonArea } from '../public/shared/prison.js';
 import { WEAPONS, WEAPON_IDS, MAX_SLOTS, DEFAULT_WEAPON, falloff } from '../public/shared/weapons.js';
 import {
   MAX_HEALTH, RESPAWN_TIME, MAX_PLAYERS, MODES, HEAD_RADIUS, BODY_TOP, BODY_BOTTOM, BODY_RADIUS,
@@ -12,7 +14,8 @@ import {
 } from '../public/shared/constants.js';
 
 const MAP = buildMap();
-const WORLD = new CollisionWorld(MAP.boxes);
+// each room gets its own collision world so prison doors can open in one room and stay shut in another
+const roomWorld = () => new CollisionWorld(MAP.boxes.concat(MAP.prison.boxes.map(b => b.door ? { ...b, min: [...b.min], max: [...b.max] } : b)));
 const HISTORY = 40;                // pose history samples kept for lag compensation (~2s at 20Hz)
 const MAX_REWIND = 0.35;           // seconds
 const SPAWN_PROTECT = 1.5;
@@ -38,6 +41,7 @@ export class Room {
     this.code = code;
     this.server = server;
     this.isPublic = !!opts.isPublic;
+    this.crimes = opts.crimes !== false;   // player-vs-player crimes (attacking players, destruction). Tests that need a pure deathmatch turn it off.
     this.mode = MODES[opts.mode] ? opts.mode : 'ffa';
     this.killLimit = clamp(Number(opts.killLimit) || MODES[this.mode].killLimit, 5, 200);
     this.timeLimit = clamp(Number(opts.timeLimit) || MODES[this.mode].timeLimit, 60, 3600);
@@ -49,8 +53,10 @@ export class Room {
     this.teamScores = [0, 0];
     this.match = { state: 'playing', endsAt: now() + this.timeLimit, winner: null, resetAt: 0 };
     this.created = now();
-    this.npcs = new NPCManager(this, MAP, WORLD);
-    this.vehicles = new VehicleManager(this, MAP, WORLD);
+    this.world = roomWorld();
+    this.npcs = new NPCManager(this, MAP, this.world);
+    this.vehicles = new VehicleManager(this, MAP, this.world);
+    this.prison = new PrisonManager(this, MAP, this.world);
     this.npcAcc = 0; this.snapCount = 0;
   }
   now() { return now(); }
@@ -97,6 +103,7 @@ export class Room {
     const p = this.players.get(id);
     if (!p) return;
     this.vehicles.playerGone(p);
+    this.prison.playerGone(p);
     this.players.delete(id);
     this.server.tokens.delete(p.token);
     if (this.hostId === id) {
@@ -114,7 +121,8 @@ export class Room {
 
   publicPlayer(p) {
     return { id: p.id, name: p.name, cos: p.cos, team: p.team, hp: p.hp, alive: p.alive, kills: p.kills,
-             deaths: p.deaths, connected: p.connected, vr: p.vr, host: p.id === this.hostId, cash: p.cash || 0, wanted: p.wanted || 0, role: p.role || 'civilian' };
+             deaths: p.deaths, connected: p.connected, vr: p.vr, host: p.id === this.hostId, cash: p.cash || 0, wanted: p.wanted || 0, role: p.role || 'civilian',
+             jail: p.jail ? (p.jail.state === 'cut' ? 1 : p.jail.disguise ? 3 : 2) : 0 };
   }
 
   fullState(p) {
@@ -124,7 +132,8 @@ export class Room {
       players: [...this.players.values()].map(q => this.publicPlayer(q)),
       pickups: this.pickups.map(k => [k.id, k.avail ? 1 : 0]),
       teamScores: this.teamScores, match: this.matchInfo(), st: now(),
-      spawn: p.spawnPoint, life: p.life, inv: this.invPayload(p), npcs: this.npcs.snapshot(), cars: this.vehicles.snapshot(), inCar: p.inCar || 0
+      spawn: p.spawnPoint, life: p.life, inv: this.invPayload(p), npcs: this.npcs.snapshot(), cars: this.vehicles.snapshot(), inCar: p.inCar || 0,
+      jail: this.prison.meState(p), prison: this.prison.stateMsg(), holding: p.holding ? 1 : 0
     };
   }
 
@@ -156,9 +165,14 @@ export class Room {
       case 'exitCar': return this.vehicles.onExit(p);
       case 'siren': return this.vehicles.onSiren(p, msg.on);
       case 'arrest': return this.onArrest(p, Math.floor(Number(msg.id)));
+      case 'pAct': return this.prison.onAct(p, String(msg.id || ''));
+      case 'pTalk': return this.prison.onTalk(p, Math.floor(Number(msg.id)));
+      case 'ballGrab': return this.prison.onBallGrab(p);
+      case 'ballThrow': return this.prison.onBallThrow(p, msg.v);
+      case 'skipCut': return this.prison.skipCut(p);
       case 'setRole': {
         const role = msg.role === 'cop' ? 'cop' : 'civilian';
-        if (role === p.role) return;
+        if (role === p.role || p.jail || p.holding) return;
         p.role = role;
         if (p.wanted) this.npcs.clearWanted(p);
         if (p.alive) this.kill(p, null, null, false, true); // quick silent respawn at the right place
@@ -199,7 +213,9 @@ export class Room {
     if (vals.length !== 21 || vals.some(v => typeof v !== 'number' || !Number.isFinite(v))) return;
     const t = now();
     const [hx, hy, hz] = m.h;
-    if (Math.abs(hx) > 130 || Math.abs(hz) > 130 || hy < -20 || hy > 80) return;
+    if ((Math.abs(hx) > 130 || Math.abs(hz) > 130) && !inPrisonArea(hx, hz)) return;
+    if (hy < -20 || hy > 80) return;
+    if (p.jail && p.jail.state === 'cut') return; // frozen during the arrest cutscene
     if (p.pose && p.alive) {
       const dt = Math.max(0.03, t - p.lastStateAt);
       const dist = Math.hypot(hx - p.pose.h[0], hy - p.pose.h[1], hz - p.pose.h[2]);
@@ -306,6 +322,7 @@ export class Room {
   // ------------------------------------------------------------------ combat
   onShoot(p, m) {
     const t = now();
+    if (p.arrestBy) this.npcs.resistArrest(p, 'shooting');
     const s = p.slots[p.cur];
     if (!p.alive || !s || s.w !== m.w || !p.pose) return this.sendInventory(p);
     const def = WEAPONS[s.w];
@@ -359,7 +376,7 @@ export class Room {
     const dmgMap = new Map();
     const ends = [];
     for (const d of dirs) {
-      const wd = WORLD.raycast(o[0], o[1], o[2], d[0], d[1], d[2], def.range);
+      const wd = this.world.raycast(o[0], o[1], o[2], d[0], d[1], d[2], def.range);
       let best = Math.min(wd, def.range), bestT = null, head = false;
       for (const tg of targets) {
         const { x, y, z } = tg.hpos;
@@ -395,6 +412,9 @@ export class Room {
   damage(q, attacker, amount, w, head, from) {
     if (!q.alive || amount <= 0) return;
     if (q.protectUntil > now()) return;
+    if ((q.jail && q.jail.state === 'cut') || q.holding) return;
+    // attacking innocent people in public makes you wanted (Free For All only; team matches are a war)
+    if (this.crimes && attacker && attacker !== q && attacker.role !== 'cop' && !attacker.jail && !MODES[this.mode].teams && !q.wanted && !attacker.wanted && attacker.pose && this.npcs.witnessed(attacker.pose.h[0], attacker.pose.h[2])) this.npcs.addWanted(attacker, 1, 'attacking a player');
     q.hp = Math.max(0, q.hp - amount);
     this.broadcast({ type: 'dmg', id: q.id, by: attacker ? attacker.id : null, amt: amount, hp: q.hp, head: !!head,
                      from: from ? from.map(r3) : null, w });
@@ -415,6 +435,7 @@ export class Room {
       killer.cash = Math.max(0, (killer.cash || 0) - 100); // cops are fined for taking out innocent people
       this.sendTo(killer, { type: 'penalty', amt: 100, reason: 'shot an innocent' });
     }
+    if (this.crimes && !silent && killer && killer !== victim && killer.role !== 'cop' && !killer.jail && !MODES[this.mode].teams && !victim.wanted && victim.role !== 'cop' && killer.pose && this.npcs.witnessed(killer.pose.h[0], killer.pose.h[2])) this.npcs.addWanted(killer, 1, 'murder');
     if (victim.wanted) this.npcs.clearWanted(victim);
     if (!silent && killer && killer !== victim) {
       killer.kills++;
@@ -430,7 +451,16 @@ export class Room {
     const q = this.players.get(id);
     if (!q || q === p || p.role !== 'cop' || !p.alive || !q.alive || !q.wanted || !p.pose || !q.pose) return;
     if (Math.hypot(p.pose.h[0] - q.pose.h[0], p.pose.h[1] - q.pose.h[1], p.pose.h[2] - q.pose.h[2]) > 2.8) return;
-    this.kill(q, p, 'arrest', false);
+    if (q.jail || q.holding) return;
+    this.prison.arrest(q, p, null);
+  }
+
+  // move a player somewhere (server decides): bumps life so stale client states are ignored
+  teleport(p, pos, yaw = 0) {
+    p.life++;
+    p.pose = { h: [pos[0], pos[1] + 1.45, pos[2], 0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)], l: [pos[0], pos[1] + 1, pos[2], 0, 0, 0, 1], r: [pos[0], pos[1] + 1, pos[2], 0, 0, 0, 1] };
+    p.hist = []; p.lastStateAt = now();
+    this.sendTo(p, { type: 'tp', p: pos, yaw, life: p.life });
   }
 
   scores() {
@@ -442,6 +472,7 @@ export class Room {
     const owner = this.players.get(rk.owner);
     this.broadcast({ type: 'explode', id: rk.id, p: [r3(x), r3(y), r3(z)], owner: rk.owner });
     this.npcs.splash(x, y, z, owner || null, def);
+    if (this.crimes && owner && owner.role !== 'cop' && !owner.jail && now() > (owner.boomAt || 0) && this.npcs.witnessed(x, z, 30)) { owner.boomAt = now() + 15; this.npcs.addWanted(owner, 1, 'destruction'); }
     for (const q of this.players.values()) {
       if (!q.alive || !q.pose || !q.connected) continue;
       if (MODES[this.mode].teams && owner && q.team === owner.team && q !== owner) continue;
@@ -452,7 +483,7 @@ export class Room {
       else if (dist < def.splashRadius) {
         // line of sight from explosion to target
         const dx = (cx - x) / (dist || 1), dy = (cy - y) / (dist || 1), dz = (cz - z) / (dist || 1);
-        const wd = WORLD.raycast(x + dx * 0.2, y + dy * 0.2, z + dz * 0.2, dx, dy, dz, dist);
+        const wd = this.world.raycast(x + dx * 0.2, y + dy * 0.2, z + dz * 0.2, dx, dy, dz, dist);
         if (wd < dist - 0.4) continue;
         dmg = def.splashDamage * (1 - dist / def.splashRadius * 0.7);
       }
@@ -481,6 +512,16 @@ export class Room {
 
   spawn(p) {
     if (p.inCar) this.vehicles.playerGone(p);
+    if (p.jail && p.jail.state === 'in') {
+      // prisoners wake up back in their cell, still without weapons
+      const b = this.prison.bedSpawn(p);
+      p.alive = true; p.hp = MAX_HEALTH; p.life++; p.slots = []; p.cur = 0; p.protectUntil = now() + SPAWN_PROTECT;
+      p.pose = { h: [b.p[0], b.p[1] + 1.45, b.p[2], 0, 0, 0, 1], l: [b.p[0], b.p[1] + 1, b.p[2], 0, 0, 0, 1], r: [b.p[0], b.p[1] + 1, b.p[2], 0, 0, 0, 1] };
+      p.hist = []; p.lastStateAt = now(); p.spawnPoint = { p: b.p, yaw: b.yaw };
+      this.broadcast({ type: 'respawn', id: p.id, p: b.p, yaw: b.yaw, life: p.life, hp: p.hp });
+      this.sendInventory(p);
+      return;
+    }
     const s = this.pickSpawn(p);
     p.alive = true; p.hp = MAX_HEALTH; p.life++;
     p.slots = []; p.cur = 0; p.reloadingUntil = 0;
@@ -525,7 +566,8 @@ export class Room {
     this.teamScores = [0, 0];
     for (const q of this.players.values()) { q.kills = 0; q.deaths = 0; q.headshots = 0; q.cash = 0; q.wanted = 0; q.robs = 0; }
     this.npcs.reset();
-    for (const q of this.players.values()) q.inCar = 0;
+    this.prison.reset();
+    for (const q of this.players.values()) { q.inCar = 0; q.jail = null; q.holding = null; q.savedInv = null; }
     this.vehicles.reset();
     this.pickups.forEach(k => { k.avail = true; k.respawnAt = 0; });
     this.rockets = [];
@@ -539,14 +581,14 @@ export class Room {
     const t = now();
     this.finishReloads(t);
     this.npcAcc += dt;
-    if (this.npcAcc >= 0.1) { const d = Math.min(0.25, this.npcAcc); this.npcs.tick(d); this.vehicles.tick(d); this.npcAcc = 0; }
+    if (this.npcAcc >= 0.1) { const d = Math.min(0.25, this.npcAcc); this.npcs.tick(d); this.vehicles.tick(d); this.prison.tick(d); this.npcAcc = 0; }
     // rockets
     for (let i = this.rockets.length - 1; i >= 0; i--) {
       const rk = this.rockets[i];
       const sp = Math.hypot(rk.vx, rk.vy, rk.vz);
       const dx = rk.vx / sp, dy = rk.vy / sp, dz = rk.vz / sp;
       const step = sp * dt;
-      const wd = WORLD.raycast(rk.x, rk.y, rk.z, dx, dy, dz, step);
+      const wd = this.world.raycast(rk.x, rk.y, rk.z, dx, dy, dz, step);
       let direct = null, hitT = wd;
       for (const q of this.players.values()) {
         if (!q.alive || !q.pose || q.id === rk.owner) continue;
@@ -589,6 +631,9 @@ export class Room {
                 s ? WEAPON_IDS.indexOf(s.w) : -1, p.reloadingUntil > now() ? 1 : 0, p.vr ? 1 : 0]);
     }
     this.broadcast({ type: 'snap', st: r3(now()), p: arr, m: Math.round(Math.max(0, this.match.endsAt - now())) });
-    if (this.snapCount++ % 2 === 0) this.broadcast({ type: 'npcs', st: r3(now()), n: this.npcs.snapshot(), c: this.vehicles.snapshot() });
+    if (this.snapCount++ % 2 === 0) {
+      this.broadcast({ type: 'npcs', st: r3(now()), n: this.npcs.snapshot(), c: this.vehicles.snapshot() });
+      if (this.prison.active) this.broadcast({ type: 'pBall', st: r3(now()), ...this.prison.ballState() });
+    }
   }
 }

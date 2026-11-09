@@ -254,3 +254,51 @@ export function startMusic() {
   }, 50);
 }
 export function stopMusic() { clearInterval(musicTimer); musicTimer = null; }
+
+// ---------------------------------------------------------------- prison + arrest sounds
+export function playCuffs() {
+  if (!ctx) return; const t = ctx.currentTime;
+  for (const k of [0, 0.09, 0.16, 0.5, 0.59]) { tone(sfx, t + k, 0.03, { type: 'square', freq: 2400, to: 1800, gain: 0.12 }); noise(sfx, t + k, 0.03, { type: 'highpass', freq: 5000, gain: 0.25 }); }
+}
+export function playCarDoorSlam() { if (!ctx) return; const t = ctx.currentTime; noise(sfx, t, 0.18, { freq: 400, gain: 0.7 }); tone(sfx, t, 0.2, { type: 'sine', freq: 90, to: 45, gain: 0.6 }); }
+export function playCellDoor(pos) {
+  if (!ctx) return; const d = pos ? out(pos, 40) : sfx; if (!d) return; const t = ctx.currentTime;
+  noise(d, t, 0.7, { type: 'bandpass', freq: 900, q: 3, gain: 0.35, sweepTo: 500 });
+  tone(d, t + 0.62, 0.25, { type: 'square', freq: 140, to: 70, gain: 0.35 }); noise(d, t + 0.62, 0.12, { freq: 3000, gain: 0.5 });
+}
+export function playGate(pos) {
+  if (!ctx) return; const d = pos ? out(pos, 80) : sfx; if (!d) return; const t = ctx.currentTime;
+  noise(d, t, 3.2, { type: 'lowpass', freq: 260, gain: 0.45 }); tone(d, t, 3.2, { type: 'sawtooth', freq: 48, to: 52, gain: 0.12 });
+  for (let k = 0; k < 6; k++) tone(d, t + k * 0.55, 0.12, { type: 'square', freq: 880, gain: 0.08 });
+}
+export function playBuzzer() { if (!ctx) return; const t = ctx.currentTime; tone(sfx, t, 0.6, { type: 'sawtooth', freq: 110, gain: 0.25 }); tone(sfx, t, 0.6, { type: 'square', freq: 220, gain: 0.08 }); }
+export function playChime() { if (!ctx) return; const t = ctx.currentTime; [523, 659, 784].forEach((f, i) => tone(sfx, t + i * 0.22, 0.5, { type: 'sine', freq: f, gain: 0.18 })); }
+export function playAlarm() {
+  if (!ctx) return; const t = ctx.currentTime;
+  for (let k = 0; k < 4; k++) tone(sfx, t + k * 0.5, 0.45, { type: 'sawtooth', freq: 600, to: 1100, gain: 0.12 });
+}
+export function playShock() { if (!ctx) return; const t = ctx.currentTime; noise(sfx, t, 0.5, { type: 'highpass', freq: 2500, gain: 0.7 }); for (let k = 0; k < 8; k++) tone(sfx, t + k * 0.05, 0.04, { type: 'square', freq: 60 + Math.random() * 90, gain: 0.3 }); }
+export function playSwish() { if (!ctx) return; const t = ctx.currentTime; noise(sfx, t, 0.3, { type: 'bandpass', freq: 1800, q: 2, gain: 0.35, sweepTo: 600 }); }
+export function playBounce(pos) { if (!ctx) return; const d = out(pos, 30); if (!d) return; tone(d, ctx.currentTime, 0.12, { type: 'sine', freq: 140, to: 70, gain: 0.35 }); }
+export function playScrape(pos) { if (!ctx) return; const d = pos ? out(pos, 30) : sfx; if (!d) return; noise(d, ctx.currentTime, 0.28, { type: 'bandpass', freq: 2200, q: 4, gain: 0.3 }); }
+export function playHeartbeat() { if (!ctx) return; const t = ctx.currentTime; tone(sfx, t, 0.12, { type: 'sine', freq: 60, gain: 0.5 }); tone(sfx, t + 0.22, 0.12, { type: 'sine', freq: 55, gain: 0.4 }); }
+
+// police radio: a burst of static, then a voice line (speech synthesis, if the browser has it)
+export function radio(text, { pitch = 0.85, rate = 1.05 } = {}) {
+  if (ctx) {
+    const t = ctx.currentTime;
+    noise(sfx, t, 0.22, { type: 'bandpass', freq: 1800, q: 1.2, gain: 0.28 });
+    tone(sfx, t + 0.02, 0.08, { type: 'square', freq: 1400, gain: 0.05 });
+  }
+  try {
+    if (!('speechSynthesis' in window) || !text) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.pitch = pitch; u.rate = rate; u.volume = Math.min(1, (settings.volMaster || 1) * 0.9);
+    const voices = speechSynthesis.getVoices();
+    const v = voices.find(x => /en[-_](US|GB)/i.test(x.lang) && /male|david|daniel|alex|guy/i.test(x.name)) || voices.find(x => /^en/i.test(x.lang));
+    if (v) u.voice = v;
+    u.onend = () => { if (ctx) noise(sfx, ctx.currentTime, 0.15, { type: 'bandpass', freq: 1800, q: 1.2, gain: 0.2 }); };
+    speechSynthesis.speak(u);
+  } catch {}
+}
+export function stopRadio() { try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {} }

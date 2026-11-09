@@ -52,7 +52,7 @@ async function walk(bot, from, to) {
   const A = new Bot('Rocketeer'), B = new Bot('Target');
   await A.connect(); await B.connect();
   await A.wait(m => m.type === 'welcome'); await B.wait(m => m.type === 'welcome');
-  A.send({ type: 'create', mode: 'ffa', killLimit: 5, timeLimit: 600 });
+  A.send({ type: 'create', mode: 'ffa', killLimit: 5, timeLimit: 600, crimes: false });
   const ja = await A.wait(m => m.type === 'joined');
   ok(ja.killLimit === 5, 'custom kill limit applied (5)');
   B.send({ type: 'join', code: ja.code });

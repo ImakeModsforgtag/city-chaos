@@ -18,19 +18,22 @@ const torus = new THREE.TorusGeometry(0.19, 0.025, 6, 16);
 function carGeometry(ci, open = false) {
   const key = ci + (open ? 'o' : '');
   if (geoCache[key]) return geoCache[key];
-  const police = ci === POLICE;
-  const c = police ? 0xf4f6fb : COLORS[ci % COLORS.length], dark = 0x23233a, trim = 0xd9dde8, glass = 0x9be7ff;
+  if (ci === 10) return (geoCache[key] = vanGeometry(open));
+  const police = ci === POLICE || ci === 9, suv = ci === 9;
+  const c = suv ? 0x1d2340 : police ? 0xf4f6fb : COLORS[ci % COLORS.length], dark = 0x23233a, trim = 0xd9dde8, glass = 0x9be7ff;
   const b = new GeoBatch(), glow = new GeoBatch();
-  b.box(-1.0, 0.32, -2.15, 1.0, 1.0, 2.15, c);                    // body
-  if (police) {
+  b.box(-1.0, 0.32, -2.15, 1.0, suv ? 1.12 : 1.0, 2.15, c);       // body
+  if (suv) { for (const sx of [-1.02, 1.02]) b.box(sx - 0.004, 0.7, -1.9, sx + 0.004, 0.84, 1.9, 0xf4f6fb); b.box(-1.0, 0.3, -2.45, 1.0, 0.7, -2.22, 0x111111); }
+  if (police && !suv) {
     b.box(-1.012, 0.36, -1.3, 1.012, 0.96, 0.95, 0x1d2340);         // black and white doors
     b.box(-1.01, 0.62, -2.17, 1.01, 1.003, -1.45, 0x1d2340);        // dark hood tip
     for (const sx of [-1.02, 1.02]) b.box(sx - 0.004, 0.66, -0.75, sx + 0.004, 0.86, 0.45, 0xffd23f); // gold badge stripe
     b.box(-1.0, 0.3, -2.42, 1.0, 0.62, -2.22, 0x15151f);           // push bar
   }
   if (!open) {
-    b.box(-0.92, 1.0, -0.95, 0.92, 1.62, 1.15, c);                // cabin
-    b.box(-0.95, 1.6, -0.9, 0.95, 1.68, 1.1, new THREE.Color(c).multiplyScalar(0.85).getHex()); // roof
+    const top = suv ? 1.78 : 1.62;
+    b.box(-0.92, 1.0, -0.95, 0.92, top, suv ? 1.9 : 1.15, c);                // cabin
+    b.box(-0.95, top - 0.02, -0.9, 0.95, top + 0.06, suv ? 1.85 : 1.1, new THREE.Color(c).multiplyScalar(0.85).getHex()); // roof
   } else {
     b.box(-0.95, 1.0, -0.95, 0.95, 1.18, -0.7, dark);              // dashboard
     for (const sx of [-0.9, 0.86]) b.box(sx, 1.18, -0.93, sx + 0.04, 1.5, -0.89, dark); // windshield pillars (no glass, so you can see)
@@ -59,6 +62,44 @@ function carGeometry(ci, open = false) {
 }
 const bodyMat = MAT.lambert(), glowMat = MAT.basic();
 export const POLICE = 8;
+const isPolice = (c) => c === POLICE || c === 9;   // 9 = police SUV (3+ stars)
+// prison transport van (vehicle escape route)
+function vanGeometry(open) {
+  const b = new GeoBatch(), glow = new GeoBatch(), w = 0xf5f6fa, dark = 0x23233a;
+  b.box(-1.05, 0.32, -2.4, 1.05, 1.15, 2.4, w);
+  if (!open) b.box(-1.0, 1.15, -1.3, 1.0, 2.3, 2.4, w); else { b.box(-1.0, 1.15, 0.6, 1.0, 2.3, 2.4, w); b.box(-0.95, 1.0, -1.0, 0.95, 1.18, -0.75, dark); b.geom(torus, trs(SEAT.x, 1.1, -0.47, -1.1, 0, 0), dark); }
+  for (const sx of [-1.06, 1.06]) b.box(sx - 0.005, 1.0, -2.3, sx + 0.005, 1.3, 2.3, 0xe67e22);
+  if (!open) { b.quad(0, 1.75, -1.31, 1.8, 0.7, 'z', -1, 0x9be7ff); for (const sx of [-1, 1]) for (let z = -0.2; z < 2.2; z += 0.8) b.quad(sx * 1.005, 1.85, z, 0.5, 0.3, 'x', sx, 0x2c3e50); }
+  b.box(-1.08, 0.28, -2.48, 1.08, 0.55, -2.3, dark); b.box(-1.08, 0.28, 2.3, 1.08, 0.55, 2.48, dark);
+  for (const sx of [-1, 1]) for (const sz of [-1.55, 1.55]) b.geom(cyl, trs(sx * 1.02, 0.42, sz, 0, 0, Math.PI / 2, 0.42, 0.3, 0.42), 0x1b1b24);
+  glow.box(-0.9, 0.62, -2.41, -0.5, 0.82, -2.39, 0xfff6c0); glow.box(0.5, 0.62, -2.41, 0.9, 0.82, -2.39, 0xfff6c0);
+  glow.box(-0.9, 0.62, 2.39, -0.55, 0.8, 2.41, 0xff3030); glow.box(0.55, 0.62, 2.39, 0.9, 0.8, 2.41, 0xff3030);
+  return { body: b.build(), glow: glow.build() };
+}
+// The police car used in the arrest cutscene: open frame with see-through windows, a back seat and a cage,
+// so the camera (or your VR head) can sit in the back and watch the city go by.
+export function cutsceneCar() {
+  const root = new THREE.Group();
+  const g = carGeometry(POLICE, true);
+  const body = new THREE.Mesh(g.body, bodyMat); body.castShadow = true; root.add(body);
+  root.add(new THREE.Mesh(g.glow, glowMat));
+  const b = new GeoBatch(), dark = 0x23233a, c = 0xf4f6fb;
+  for (const [x, z] of [[-0.9, -0.93], [0.86, -0.93], [-0.92, 0.25], [0.88, 0.25], [-0.92, 1.12], [0.88, 1.12]]) b.box(x, 1.0, z, x + 0.05, 1.64, z + 0.05, dark); // pillars
+  b.box(-0.95, 1.62, -0.92, 0.95, 1.7, 1.17, c);                         // roof
+  b.box(-0.85, 0.6, 1.0, 0.85, 1.3, 1.2, 0x3d3f52); b.box(-0.85, 0.6, 0.45, 0.85, 0.78, 1.05, 0x3d3f52); // back bench
+  for (let x = -0.85; x <= 0.85; x += 0.24) b.box(x - 0.008, 0.95, 0.31, x + 0.008, 1.62, 0.33, 0x7f8c8d); // cage between front + back
+  b.box(-0.9, 1.0, 0.3, 0.9, 1.03, 0.34, 0x7f8c8d);
+  const frame = new THREE.Mesh(b.build(), bodyMat); root.add(frame);
+  const glassMat = new THREE.MeshBasicMaterial({ color: 0x9be7ff, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide });
+  for (const [w, h, x, y, z, ry] of [[1.75, 0.5, 0, 1.35, -0.95, 0], [1.75, 0.5, 0, 1.35, 1.16, 0], [2.0, 0.5, -0.93, 1.35, 0.1, Math.PI / 2], [2.0, 0.5, 0.93, 1.35, 0.1, Math.PI / 2]]) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), glassMat); m.position.set(x, y, z); m.rotation.y = ry; m.renderOrder = 3; root.add(m);
+  }
+  const lights = [new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: OFF })), new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: OFF }))];
+  lights[0].position.set(-0.34, 1.8, 0); lights[1].position.set(0.34, 1.8, 0); root.add(...lights);
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.3), new THREE.MeshLambertMaterial({ color: 0x2a2a35 })); bar.position.set(0, 1.72, 0); root.add(bar);
+  return { root, lights, rearSeat: new THREE.Vector3(0.42, 1.36, 0.85), frontSeats: [new THREE.Vector3(SEAT.x, SEAT.y, SEAT.z), new THREE.Vector3(-SEAT.x, SEAT.y, SEAT.z)],
+           flash(t, on) { const ph = Math.floor(t * 6) % 2; lights[0].material.color.copy(on && ph ? RED_ON : OFF); lights[1].material.color.copy(on && !ph ? BLUE_ON : OFF); } };
+}
 const lightGeo = new THREE.BoxGeometry(0.62, 0.16, 0.26);
 const RED_ON = new THREE.Color(0xff2a2a), BLUE_ON = new THREE.Color(0x2a6bff), OFF = new THREE.Color(0x55555f);
 
@@ -72,17 +113,18 @@ export class Cars {
     const body = new THREE.Mesh(g.body, bodyMat); body.castShadow = true; root.add(body);
     body.userData.color = color;
     root.add(new THREE.Mesh(g.glow, glowMat));
-    const driver = npcBodyMesh(1000 + id, color === POLICE ? 2 : 0); // police cars get a uniformed cop driver
+    const driver = npcBodyMesh(1000 + id, isPolice(color) ? 2 : color === 10 ? 3 : 0); // police cars get a uniformed cop driver
     driver.position.set(SEAT.x, SEAT.y - 1.55, SEAT.z); driver.scale.setScalar(0.95);
     root.add(driver);
     let lights = null;
-    if (color === POLICE) {
+    if (isPolice(color)) {
       lights = [new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: OFF })), new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: OFF }))];
-      lights[0].position.set(-0.34, 1.84, 0); lights[1].position.set(0.34, 1.84, 0);
+      const ly = color === 9 ? 1.94 : 1.84;
+      lights[0].position.set(-0.34, ly, 0); lights[1].position.set(0.34, ly, 0);
       for (const l of lights) root.add(l);
     }
     this.scene.add(root);
-    return { id, root, body, driver, lights, police: color === POLICE, siren: false, buf: [], x: 0, y: 0, z: 0, yaw: 0, speed: 0, driverKind: 0, pid: 0, open: false };
+    return { id, root, body, driver, lights, police: isPolice(color), van: color === 10, lightY: color === 9 ? 1.94 : 1.84, siren: false, buf: [], x: 0, y: 0, z: 0, yaw: 0, speed: 0, driverKind: 0, pid: 0, open: false };
   }
   sync(list, st) {
     if (!list) return;
@@ -125,7 +167,7 @@ export class Cars {
       c.root.position.set(c.x, c.y, c.z); c.root.rotation.y = c.yaw;
       if (c.lights) {
         // light bar sits on the roof, or on the trunk of the open top car you're driving in VR
-        const y = c.open ? 1.16 : 1.84, z = c.open ? 1.6 : 0;
+        const y = c.open ? 1.16 : c.lightY, z = c.open ? 1.6 : 0;
         c.lights[0].position.set(-0.34, y, z); c.lights[1].position.set(0.34, y, z);
         const ph = Math.floor(serverNow * 6) % 2;
         c.lights[0].material.color.copy(c.siren ? (ph ? RED_ON : OFF) : OFF);

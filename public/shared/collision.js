@@ -30,7 +30,7 @@ export class CollisionWorld {
     for (let x = cx0; x <= cx1; x++) for (let z = cz0; z <= cz1; z++) {
       const arr = this.grid.get(x * 4096 + z);
       if (!arr) continue;
-      for (const i of arr) if (this.stamp[i] !== s) { this.stamp[i] = s; out.push(i); }
+      for (const i of arr) if (this.stamp[i] !== s) { this.stamp[i] = s; if (!this.boxes[i].off) out.push(i); } // .off = open door
     }
     return out;
   }
@@ -119,6 +119,7 @@ export class CollisionWorld {
           if (this.stamp[i] === s) continue;
           this.stamp[i] = s;
           const b = this.boxes[i];
+          if (b.off) continue;
           let t1 = (b.min[0] - ox) * ix, t2 = (b.max[0] - ox) * ix;
           let tmin = Math.min(t1, t2), tmax = Math.max(t1, t2), axis = 0;
           let sgn = t1 < t2 ? -1 : 1;

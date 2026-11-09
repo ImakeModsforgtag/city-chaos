@@ -6,6 +6,9 @@ import { WEAPON_IDS, WEAPONS } from '/shared/weapons.js';
 export const INTERP_DELAY = 0.1;
 const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion();
 
+// role / prison clothing on top of the player's own cosmetics (jail: 1 cutscene, 2 prisoner, 3 guard disguise)
+const uniformCos = (info) => ({ ...info.cos, cop: info.role === 'cop', prisoner: info.jail === 2, guard: info.jail === 3 });
+
 export class RemotePlayers {
   constructor(scene, effects) {
     this.scene = scene; this.effects = effects;
@@ -17,15 +20,15 @@ export class RemotePlayers {
     if (info.id === this.myId) return null;
     let p = this.players.get(info.id);
     if (!p) {
-      const avatar = new Avatar({ ...info.cos, cop: info.role === 'cop' }, { name: info.name, team: info.team });
+      const avatar = new Avatar(uniformCos(info), { name: info.name, team: info.team });
       avatar.setRole(info.role); avatar.setWanted(info.wanted);
       this.scene.add(avatar.root);
       avatar.root.visible = false;
       p = { info, avatar, buf: [], alive: info.alive, voice: null };
       this.players.set(info.id, p);
     } else {
-      const cosChanged = JSON.stringify(p.info.cos) !== JSON.stringify(info.cos) || (p.info.role === 'cop') !== (info.role === 'cop');
-      if (cosChanged) p.avatar.setCosmetics({ ...info.cos, cop: info.role === 'cop' });
+      const cosChanged = JSON.stringify(p.info.cos) !== JSON.stringify(info.cos) || (p.info.role === 'cop') !== (info.role === 'cop') || (p.info.jail || 0) !== (info.jail || 0);
+      if (cosChanged) p.avatar.setCosmetics(uniformCos(info));
       p.avatar.setRole(info.role); if (info.wanted !== undefined) p.avatar.setWanted(info.wanted);
       if (p.info.name !== info.name || p.info.team !== info.team) { p.avatar.team = info.team; p.avatar.setName(info.name, info.team); p.avatar.setTeam(info.team); }
       p.info = { ...p.info, ...info };
@@ -70,8 +73,8 @@ export class RemotePlayers {
       const alive = b[1] === 1;
       if (p.alive && !alive) { /* death handled by kill event */ }
       p.alive = alive;
-      av.root.visible = alive;
-      if (!alive) continue;
+      av.root.visible = alive && p.info.jail !== 1;   // hidden while their arrest cutscene plays
+      if (!av.root.visible) continue;
       const lerp = (i) => a[i] + (b[i] - a[i]) * k;
       const pose = (o) => {
         _qa.set(a[o + 3], a[o + 4], a[o + 5], a[o + 6]); _qb.set(b[o + 3], b[o + 4], b[o + 5], b[o + 6]);
