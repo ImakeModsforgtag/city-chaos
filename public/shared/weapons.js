@@ -32,6 +32,14 @@ export const WEAPONS = {
     reloadTime: 2.6, spread: 0.0005, pellets: 1, range: 400, falloffStart: 400, falloffEnd: 401,
     headMult: 2.5, kick: 0.2, color: 0xb57bff, icon: '🎯', rarity: 'rare'
   },
+  // Secret: only sold at the GUN SHOP to a cop with 5 arrests, one per game. Bolt action, real scope,
+  // scope ESP, locks a headshot on whatever it's aimed close to, and the shooter rides the bullet.
+  golden: {
+    name: 'Golden Sniper', damage: 100, fireInterval: 1.6, auto: false, mag: 5, reserve: 15,
+    reloadTime: 2.8, spread: 0, pellets: 1, range: 500, falloffStart: 500, falloffEnd: 501,
+    headMult: 3, kick: 0.22, color: 0xffcf3a, icon: '🏆', rarity: 'mythic', shopOnly: true,
+    bulletSpeed: 90, scopeFov: [9, 3.5]
+  },
   rocket: {
     name: 'Rocket Launcher', damage: 110, fireInterval: 1.2, auto: false, mag: 1, reserve: 3,
     reloadTime: 2.5, spread: 0, pellets: 0, range: 300, projectileSpeed: 32,
@@ -43,6 +51,13 @@ export const WEAPONS = {
 export const WEAPON_IDS = Object.keys(WEAPONS);
 export const MAX_SLOTS = 3;           // carried weapons
 export const DEFAULT_WEAPON = 'pistol';
+
+// Golden Sniper rules (shared so the client and server agree)
+export const GOLDEN = { price: 750, arrests: 5, lockDegServer: 8, minFlight: 0.5, maxFlight: 2.2 };
+// how long the golden bullet flies (bullet cam length); damage lands when it arrives
+export function goldenFlight(dist) { return Math.min(GOLDEN.maxFlight, Math.max(GOLDEN.minFlight, dist / WEAPONS.golden.bulletSpeed)); }
+// what everyone else sees in the kill feed: it's a secret, so it shows up as a normal sniper
+export const publicWeapon = (w) => (w === 'golden' ? 'sniper' : w);
 
 export function falloff(w, dist) {
   if (dist <= w.falloffStart) return 1;

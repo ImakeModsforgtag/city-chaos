@@ -6,8 +6,9 @@ import { CollisionWorld, raySphere, rayCapsule } from '../public/shared/collisio
 import { NPCManager, rayNpc } from './npcs.js';
 import { VehicleManager } from './vehicles.js';
 import { PrisonManager } from './prison.js';
+import { GoldenSniper } from './golden.js';
 import { inPrisonArea } from '../public/shared/prison.js';
-import { WEAPONS, WEAPON_IDS, MAX_SLOTS, DEFAULT_WEAPON, falloff } from '../public/shared/weapons.js';
+import { WEAPONS, WEAPON_IDS, MAX_SLOTS, DEFAULT_WEAPON, falloff, publicWeapon } from '../public/shared/weapons.js';
 import {
   MAX_HEALTH, RESPAWN_TIME, MAX_PLAYERS, MODES, HEAD_RADIUS, BODY_TOP, BODY_BOTTOM, BODY_RADIUS,
   RECONNECT_GRACE
@@ -57,9 +58,11 @@ export class Room {
     this.npcs = new NPCManager(this, MAP, this.world);
     this.vehicles = new VehicleManager(this, MAP, this.world);
     this.prison = new PrisonManager(this, MAP, this.world);
+    this.gold = new GoldenSniper(this, MAP);
     this.npcAcc = 0; this.snapCount = 0;
   }
   now() { return now(); }
+  teamsMode() { return !!MODES[this.mode].teams; }
 
   get connectedCount() { let n = 0; for (const p of this.players.values()) if (p.connected) n++; return n; }
   get size() { return this.players.size; }
@@ -105,6 +108,7 @@ export class Room {
     this.vehicles.playerGone(p);
     this.prison.playerGone(p);
     this.players.delete(id);
+    this.gold.playerGone(id);
     this.server.tokens.delete(p.token);
     if (this.hostId === id) {
       const next = [...this.players.values()].find(q => q.connected) || [...this.players.values()][0];
@@ -170,6 +174,10 @@ export class Room {
       case 'ballGrab': return this.prison.onBallGrab(p);
       case 'ballThrow': return this.prison.onBallThrow(p, msg.v);
       case 'skipCut': return this.prison.skipCut(p);
+      case 'buyGold': return this.gold.onBuy(p);
+      case 'testGold': // automated browser tests only (server started with CC_TEST=1)
+        if (process.env.CC_TEST === '1') { p.arrests = 5; p.cash = (p.cash || 0) + 1000; this.sendTo(p, this.gold.info(p, { first: 1 })); }
+        return;
       case 'setRole': {
         const role = msg.role === 'cop' ? 'cop' : 'civilian';
         if (role === p.role || p.jail || p.holding) return;
@@ -254,7 +262,12 @@ export class Room {
       p.slots.push({ w, mag: def.mag, reserve: def.reserve });
       if (equip) p.cur = p.slots.length - 1;
     } else {
-      p.slots[p.cur] = { w, mag: def.mag, reserve: def.reserve };
+      // full: replace the gun in your hands (but never the one-of-a-kind Golden Sniper)
+      let i = p.cur;
+      if (p.slots[i] && p.slots[i].w === 'golden') i = p.slots.findIndex(s => s.w !== 'golden');
+      if (i < 0) i = p.cur;
+      p.slots[i] = { w, mag: def.mag, reserve: def.reserve };
+      if (equip) p.cur = i;
     }
     p.reloadingUntil = 0;
   }
@@ -352,6 +365,11 @@ export class Room {
       if (Math.acos(clamp(dot, -1, 1)) > def.spread * 4 + 0.03) return; // spread too wide -> reject
     }
 
+    if (s.w === 'golden') {
+      this.npcs.noise(o[0], o[2]);
+      const rw = (typeof m.ct === 'number' && Number.isFinite(m.ct)) ? clamp(m.ct, t - MAX_REWIND, t) : t;
+      return this.gold.shoot(p, s, o, d0, m, rw);
+    }
     if (s.w === 'rocket') {
       const sp = def.projectileSpeed;
       const rk = { id: this.nextRocketId++, owner: p.id, x: o[0], y: o[1], z: o[2], vx: d0[0] * sp, vy: d0[1] * sp, vz: d0[2] * sp, born: t };
@@ -417,7 +435,7 @@ export class Room {
     if (this.crimes && attacker && attacker !== q && attacker.role !== 'cop' && !attacker.jail && !MODES[this.mode].teams && !q.wanted && !attacker.wanted && attacker.pose && this.npcs.witnessed(attacker.pose.h[0], attacker.pose.h[2])) this.npcs.addWanted(attacker, 1, 'attacking a player');
     q.hp = Math.max(0, q.hp - amount);
     this.broadcast({ type: 'dmg', id: q.id, by: attacker ? attacker.id : null, amt: amount, hp: q.hp, head: !!head,
-                     from: from ? from.map(r3) : null, w });
+                     from: from ? from.map(r3) : null, w: publicWeapon(w) });
     if (q.hp <= 0) this.kill(q, attacker, w, head);
   }
 
@@ -442,8 +460,10 @@ export class Room {
       if (head) killer.headshots++;
       if (MODES[this.mode].teams && killer.team >= 0) this.teamScores[killer.team]++;
     }
-    this.broadcast({ type: 'kill', killer: killer ? killer.id : null, victim: victim.id, w: w || null, head: !!head,
-                     respawnIn: silent ? 0.5 : RESPAWN_TIME, silent, scores: this.scores() });
+    const km = { type: 'kill', killer: killer ? killer.id : null, victim: victim.id, w: w || null, head: !!head,
+                 respawnIn: silent ? 0.5 : RESPAWN_TIME, silent, scores: this.scores() };
+    if (w === 'golden' && killer) { this.broadcast({ ...km, w: publicWeapon(w) }, killer.id); this.sendTo(killer, km); } // secret weapon
+    else this.broadcast(km);
     if (!silent) this.checkWin();
   }
 
@@ -526,6 +546,7 @@ export class Room {
     p.alive = true; p.hp = MAX_HEALTH; p.life++;
     p.slots = []; p.cur = 0; p.reloadingUntil = 0;
     this.giveWeapon(p, DEFAULT_WEAPON);
+    this.gold.respawned(p);
     p.protectUntil = now() + SPAWN_PROTECT;
     const yaw = Math.atan2(-s.p[0], -s.p[2]); // face toward city center
     p.spawnPoint = { p: s.p, yaw };
@@ -580,6 +601,7 @@ export class Room {
   tick(dt) {
     const t = now();
     this.finishReloads(t);
+    this.gold.tick();
     this.npcAcc += dt;
     if (this.npcAcc >= 0.1) { const d = Math.min(0.25, this.npcAcc); this.npcs.tick(d); this.vehicles.tick(d); this.prison.tick(d); this.npcAcc = 0; }
     // rockets

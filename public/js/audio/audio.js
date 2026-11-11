@@ -89,6 +89,7 @@ const GUN = {
   smg:      { n: [0.07, 4200, 0.45], th: [220, 100, 0.06, 0.35], crack: 0.15 },
   shotgun:  { n: [0.38, 1300, 1.0], th: [90, 35, 0.3, 1.0], crack: 0.5 },
   sniper:   { n: [0.5, 2200, 1.0], th: [80, 30, 0.4, 1.0], crack: 0.7, ring: 1400 },
+  golden:   { n: [0.65, 2000, 1.1], th: [70, 26, 0.5, 1.1], crack: 0.85, ring: 1760 },
   rocket:   { n: [0.6, 700, 0.8], th: [60, 25, 0.5, 0.8], crack: 0, whoosh: true }
 };
 export function playShot(w, pos) {
@@ -105,6 +106,21 @@ export function playReload(w, phase = 0) {
   if (phase === 0) { tone(sfx, t, 0.05, { type: 'square', freq: 700, to: 300, gain: 0.12 }); noise(sfx, t + 0.02, 0.06, { type: 'bandpass', freq: 2500, q: 3, gain: 0.25 }); }
   else { tone(sfx, t, 0.04, { type: 'square', freq: 400, to: 900, gain: 0.12 }); noise(sfx, t, 0.08, { type: 'bandpass', freq: 3500, q: 4, gain: 0.35 });
     if (w === 'shotgun') { noise(sfx, t + 0.12, 0.08, { type: 'bandpass', freq: 1800, q: 3, gain: 0.4 }); } }
+}
+// Golden Sniper: bullet cam whoosh (rising, then the impact thump) and the bolt being cycled
+export function playBulletCam(dur = 1) {
+  if (!ctx) return; const t = ctx.currentTime;
+  noise(sfx, t, dur, { type: 'bandpass', freq: 500, q: 1.5, gain: 0.35, sweepTo: 1800, attack: 0.1 });
+  tone(sfx, t, dur, { type: 'sine', freq: 90, to: 140, gain: 0.12 });
+}
+export function playBulletImpact() {
+  if (!ctx) return; const t = ctx.currentTime;
+  tone(sfx, t, 0.35, { type: 'triangle', freq: 120, to: 40, gain: 0.5 }); noise(sfx, t, 0.2, { freq: 1400, gain: 0.5, sweepTo: 200 });
+}
+export function playBolt() {
+  if (!ctx) return; const t = ctx.currentTime;
+  noise(sfx, t, 0.07, { type: 'bandpass', freq: 2200, q: 5, gain: 0.35 }); noise(sfx, t + 0.22, 0.08, { type: 'bandpass', freq: 3200, q: 5, gain: 0.4 });
+  tone(sfx, t + 0.24, 0.04, { type: 'square', freq: 900, to: 1400, gain: 0.08 });
 }
 export function playEmpty() { if (!ctx) return; tone(sfx, ctx.currentTime, 0.04, { type: 'square', freq: 1200, to: 800, gain: 0.1 }); }
 export function playHit(head) {

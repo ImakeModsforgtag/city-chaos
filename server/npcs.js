@@ -167,7 +167,8 @@ export class NPCManager {
     // died
     n.state = NPC_STATE.DEAD; n.rob = null;
     n.respawnAt = this.room.now() + (n.type === NPC_TYPE.COP ? 9999 : n.type === NPC_TYPE.SHOP ? 35 : 20);
-    this.room.broadcast({ type: 'npcDie', id: n.id, by: attacker ? attacker.id : null, w, head: !!head, kind: n.type, x: r2(n.x), y: r2(n.y), z: r2(n.z) });
+    { const dm = { type: 'npcDie', id: n.id, by: attacker ? attacker.id : null, w, head: !!head, kind: n.type, x: r2(n.x), y: r2(n.y), z: r2(n.z) };
+      if (w === 'golden' && attacker) { this.room.broadcast({ ...dm, w: 'sniper' }, attacker.id); this.room.sendTo(attacker, dm); } else this.room.broadcast(dm); }
     if (attacker && attacker.role === 'cop') { attacker.cash = Math.max(0, (attacker.cash || 0) - 100); this.room.sendTo(attacker, { type: 'penalty', amt: 100, reason: 'a cop took out a civilian' }); }
     else if (attacker) {
       if (n.type === NPC_TYPE.COP) { this.addWanted(attacker, 1, 'cop killer'); this.spawnCopsFor(attacker, 1); }

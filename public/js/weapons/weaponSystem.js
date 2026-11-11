@@ -37,7 +37,7 @@ export class WeaponSystem {
     if (!this.model) return;
     const holder = this.vr ? this.vrHolder : this.deskHolder;
     // desktop viewmodels are scaled down so the whole gun fits on screen
-    const DESK = { pistol: 0.75, revolver: 0.75, smg: 0.8, ar: 0.62, shotgun: 0.58, sniper: 0.5, rocket: 0.6 };
+    const DESK = { pistol: 0.75, revolver: 0.75, smg: 0.8, ar: 0.62, shotgun: 0.58, sniper: 0.5, golden: 0.46, rocket: 0.6 };
     this.model.scale.setScalar(this.vr ? 1 : (DESK[this.modelId] || 0.7));
     if (holder && this.model.parent !== holder) holder.add(this.model);
   }
@@ -128,12 +128,22 @@ export class WeaponSystem {
       }
       dirs.push(v);
     }
-    this.net.send({ type: 'shoot', w: s.w, o: [_o.x, _o.y, _o.z].map(r4), d: dirs.map(v => [r4(v.x), r4(v.y), r4(v.z)]), ct: this.net.serverNow() - INTERP_DELAY });
+    // Golden Sniper: aim straight at the locked target's head (the server checks the lock is honest)
+    let lock = null;
+    if (s.w === 'golden' && this.golden) {
+      lock = this.golden.computeLock(_o, _d, this.lockCone || 2);
+      if (lock) { const h = this.golden.headOf(lock.kind, lock.id); if (h) dirs[0] = h.sub(_o).normalize(); else lock = null; }
+    }
+    this.net.send({ type: 'shoot', w: s.w, o: [_o.x, _o.y, _o.z].map(r4), d: dirs.map(v => [r4(v.x), r4(v.y), r4(v.z)]), ct: this.net.serverNow() - INTERP_DELAY, lock: lock ? [lock.kind, lock.id] : undefined });
     // local effects
     this.anim.kick += d.kick * 4;
     audio.playShot(s.w, null);
     this.effects.muzzle(muzzle, _d, s.w === 'rocket' ? 3 : s.w === 'shotgun' ? 2 : 1.3);
-    if (s.w !== 'rocket') {
+    if (s.w === 'golden') {
+      const hit = lock ? null : this.localTrace(_o, dirs[0], d.range);
+      if (this.onGolden) this.onGolden({ from: muzzle.clone(), dir: dirs[0].clone(), lock, end: hit ? hit.point : null });
+      setTimeout(() => audio.playBolt(), 500);
+    } else if (s.w !== 'rocket') {
       for (const v of dirs) {
         const hit = this.localTrace(_o, v, d.range);
         this.effects.tracer(muzzle, hit.point, d.color, s.w === 'sniper' ? 0.04 : 0.022);
@@ -173,7 +183,7 @@ export class WeaponSystem {
       const bob = moving ? Math.sin(t * 9) * 0.012 : Math.sin(t * 1.5) * 0.003;
       this.model.position.x = Math.cos(t * 4.5) * (moving ? 0.008 : 0);
       this.model.position.y += bob - (this.equipT || 0) * 0.8;
-      const long = { ar: 1, shotgun: 1, sniper: 1, rocket: 1 }[this.modelId];
+      const long = { ar: 1, shotgun: 1, sniper: 1, golden: 1, rocket: 1 }[this.modelId];
       this.deskHolder.position.set(0.17, long ? -0.16 : -0.15, long ? -0.3 : -0.33);
     }
   }

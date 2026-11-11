@@ -279,7 +279,7 @@ Unique items (screwdriver, bolt cutters, keycard, van keys) exist once per room;
 - **VR body:** Gorilla (default: true Gorilla Tag physics, no feet, your hands hold you up, eyes about 0.6 to 1m off the ground) / Small (standing, eyes about 1.25m, auto-calibrated to your height; use RECALIBRATE in the VR menu while standing tall) / Human (real height)
 - **VR movement:** Gorilla arms (default) / Arms + stick / Joystick
 - **VR turning:** Snap 30/45/60 degrees, Smooth, Off
-- **Comfort vignette**, **Arm strength** (how far a push throws you)
+- **Comfort vignette**, **Arm strength** (how far a push throws you, default 1.0. Hands now let go as soon as you lift them, so movement is not sticky)
 - Mouse sensitivity, field of view, volumes (master, music, effects, voice)
 - Shadows (on PC; in VR only with "Pretty" graphics to protect frame rate), graphics quality, FPS counter
 

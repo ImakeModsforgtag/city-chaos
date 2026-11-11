@@ -218,7 +218,7 @@ export function animateWeapon(w, a, dt, baseRotX = 0) {
       const id = w.userData.id;
       if (id === 'revolver') { parts.move.position.x = 0.04 * tilt; parts.move.rotation.z += dt * 18 * tilt; }
       else if (id === 'shotgun') parts.move.position.z = Math.sin(t * Math.PI * 6) * 0.06 * tilt;
-      else if (id === 'sniper') parts.move.position.z = Math.max(0, Math.sin(t * Math.PI * 2)) * 0.06;
+      else if (id === 'sniper' || id === 'golden') parts.move.position.z = Math.max(0, Math.sin(t * Math.PI * 2)) * 0.06;
       else if (id === 'rocket') parts.move.visible = t > 0.6;
       else if (id === 'pistol') parts.move.position.z = t > 0.8 ? (1 - t) * 0.2 : 0;
     }

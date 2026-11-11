@@ -67,6 +67,7 @@ export class PrisonManager {
     room.vehicles.playerGone(p);
     const at = p.pose ? p.pose.h.slice(0, 3).map(r2) : [0, 1.5, 0];
     if (byPlayer && stars) byPlayer.cash = (byPlayer.cash || 0) + stars * 200; // arresting pays a double bounty
+    if (byPlayer && room.gold) room.gold.onArrest(byPlayer);
     this.saveInventory(p);
     room.npcs.clearWanted(p);
     room.broadcast({ type: 'arrested', id: p.id, by: byPlayer ? byPlayer.id : 0, npc: byNpc ? byNpc.id : 0, stars, prison: stars >= 3, scores: room.scores() });

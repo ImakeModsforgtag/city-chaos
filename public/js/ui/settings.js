@@ -1,6 +1,6 @@
 // Persistent settings + player profile (localStorage).
 const DEFAULTS = {
-  moveMode: 'gorilla', vrSize: 'gorilla', turnMode: 'snap', snapAngle: 45, vignette: false, armBoost: 1.15,
+  moveMode: 'gorilla', vrSize: 'gorilla', turnMode: 'snap', snapAngle: 45, vignette: false, armBoost: 1.0,
   mouseSens: 1, fov: 80, volMaster: 0.8, volMusic: 0.5, volSfx: 0.9, volVoice: 1,
   shadows: true, quality: 'med', showFps: false
 };
@@ -13,6 +13,8 @@ function load(key, def) {
   catch { return structuredClone(def); }
 }
 export const settings = load('cc_settings', DEFAULTS);
+// movement retune: the old default arm strength (1.15) felt too strong, move saved defaults to the new 1.0 once
+if (!settings.moveV2) { if (Math.abs((settings.armBoost || 1) - 1.15) < 0.001) settings.armBoost = 1.0; settings.moveV2 = 1; try { localStorage.setItem('cc_settings', JSON.stringify(settings)); } catch {} }
 export const profile = load('cc_profile', PROFILE_DEFAULTS);
 const listeners = [];
 

@@ -13,7 +13,9 @@ import * as THREE from 'three';
 
 const G = 9.8;
 const HAND_R = 0.075, HEAD_R = 0.22;
-const UNSTICK = 1.0, MAX_ARM = 1.55, RELEASE = 0.03, VEL_LIMIT = 0.4, MAX_JUMP = 8.0;
+// RELEASE: how far a planted hand moves AWAY from the surface before it lets go (small = not sticky).
+// MAX_JUMP / jump multiplier match Gorilla Tag's feel (about 6.5 m/s top launch speed, 1.1x).
+const UNSTICK = 0.6, MAX_ARM = 1.55, RELEASE = 0.012, VEL_LIMIT = 0.45, MAX_JUMP = 6.5;
 const _a = { x: 0, y: 0, z: 0 }, _b = { x: 0, y: 0, z: 0 };
 const v3 = (o) => ({ x: o.x, y: o.y, z: o.z });
 
@@ -29,7 +31,7 @@ export class Gorilla {
     this.hands = [0, 1].map(() => ({ last: new THREE.Vector3(), touching: false, init: false, prev: new THREE.Vector3(), contact: null }));
     this.hist = [];
     this.anyTouching = false;
-    this.jumpMult = 1.15;
+    this.jumpMult = 1.1;
   }
   reset() { this.vel.set(0, 0, 0); this.hist = []; this.hands.forEach(h => { h.init = false; h.touching = false; }); }
 
@@ -37,7 +39,7 @@ export class Gorilla {
   // A planted hand stays "stuck" to its contact point until you pull it AWAY from the surface
   // (along the surface normal). Dragging it along the ground moves your body instead.
   handOffsets(dt, head, hands, useHands = true, slide = false) {
-    const drop = 2 * G * dt * dt; // tiny downward bias so resting hands stay "planted"
+    const drop = 0.5 * G * dt * dt; // tiny downward bias so a hand resting on the floor still registers
     const offsets = [];
     if (!useHands) { this.hands.forEach(h => { h.touching = false; h.init = false; }); return null; }
     for (let i = 0; i < 2; i++) {
@@ -51,7 +53,11 @@ export class Gorilla {
         if (slide) { h.last.x = cur.x; h.last.z = cur.z; } // joystick: planted hands slide along instead of holding you back
         const away = (cur.x - h.last.x) * n.nx + (cur.y - h.last.y) * n.ny + (cur.z - h.last.z) * n.nz;
         if (away < RELEASE) {
-          offsets.push(new THREE.Vector3(h.last.x - cur.x, h.last.y - cur.y, h.last.z - cur.z));
+          // lifting the hand off the surface never drags your body down/into it (that felt sticky):
+          // only pushing into the surface and dragging along it move you
+          const o = new THREE.Vector3(h.last.x - cur.x, h.last.y - cur.y, h.last.z - cur.z);
+          if (away > 0) o.add(new THREE.Vector3(n.nx, n.ny, n.nz).multiplyScalar(away));
+          offsets.push(o);
           h.pushing = true; continue;
         }
         h.touching = false; h.last.copy(cur); // released: hand pulled off the surface
@@ -399,7 +405,7 @@ export class VRMover {
     if (!Number.isFinite(head.x + head.y + head.z)) return { taps: [], step: false, landed: 0 };
     for (let i = 0; i < 2; i++) if (!Number.isFinite(hands[i].x + hands[i].y + hands[i].z) || hands[i].distanceTo(head) > 3) hands[i] = head.clone().add(new THREE.Vector3(i ? 0.25 : -0.25, -0.5, 0));
     if (!Number.isFinite(g.vel.x + g.vel.y + g.vel.z)) g.vel.set(0, 0, 0);
-    g.jumpMult = 1.15 * (armBoost || 1);
+    g.jumpMult = 1.1 * (armBoost || 1);
     if (gt) return this.gtUpdate(dt, rig, head, hands, { mode, stick, jump });
     const useHands = mode !== 'joystick';
     const headH = THREE.MathUtils.clamp(head.y - rig.position.y - floorOffset, 0.4, 2.3);

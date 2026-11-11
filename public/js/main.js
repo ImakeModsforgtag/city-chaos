@@ -15,6 +15,7 @@ import { NPCs, NPC_TYPE, NPC_NAMES } from './player/npcs.js';
 import { Cars, Driving, DRIVER } from './vehicles/cars.js';
 import { Pickups } from './weapons/pickups.js';
 import { WeaponSystem } from './weapons/weaponSystem.js';
+import { GoldenSniper, ESP_LAYER } from './weapons/golden.js';
 import { Walker, VRMover } from './physics/movement.js';
 import { VRInput } from './vr/vrInput.js';
 import { VRUI } from './vr/vrUI.js';
@@ -60,6 +61,15 @@ const driving = new Driving(world, cars);
 const wIcon = (w) => w === 'car' ? '🚗' : w === 'cop' ? '👮' : w === 'arrest' ? '🚔' : w === 'shock' ? '⚡' : (WEAPONS[w] && WEAPONS[w].icon) || '💥';
 const weapons = new WeaponSystem({ scene, camera, effects, net, world, remote });
 weapons.npcs = npcs;
+// the secret Golden Sniper: scope ESP, lock-on headshots, bullet cam
+const gold = new GoldenSniper({ scene, world, remote, npcs, effects, myRole: () => myRole(),
+  isFriend: (info) => !!(G.room && MODES[G.room.mode].teams && info.team === G.me.team) });
+weapons.golden = gold;
+weapons.onGolden = (s) => startBulletCam(s);
+const scopeEl = document.getElementById('scope'), bulletCamEl = document.getElementById('bulletcam');
+// VR comfort blink (bullet cam start/end): a black sphere around your head that fades out
+const blink = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 8), new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide, transparent: true, opacity: 0, depthTest: false, depthWrite: false }));
+blink.renderOrder = 9999; blink.visible = false; camera.add(blink);
 const vrInput = new VRInput(renderer, rig);
 const vrui = new VRUI({ scene, camera, input: vrInput });
 const hud = new HUD();
@@ -196,6 +206,7 @@ function leaveRoom() {
   cleanupRoom();
 }
 function cleanupRoom() {
+  G.gold = null; if (G.bcam) endBulletCam(); gold.skip();
   if (driving.active) driving.exit();
   G.room = null; G.players.clear(); remote.clear(); npcs.clear(); cars.clear(); voice.closeAll(); G.me.wanted = 0; G.rob = null;
   G.death = null; G.matchEnd = null; G.me.alive = false;
@@ -308,6 +319,7 @@ net.on('shot', (m) => {
   const d = WEAPONS[m.w];
   for (const e of m.e) {
     const end = new THREE.Vector3(...e);
+    if (m.w === 'golden') { gold.fire({ from, dir: end.clone().sub(from), lock: null, end, fly: m.fly, cam: false }); continue; }
     effects.tracer(from, end, d.color, m.w === 'sniper' ? 0.04 : 0.022);
     effects.impact(end, null, false);
   }
@@ -320,6 +332,21 @@ net.on('shot', (m) => {
   if (cp.distanceTo(me) < 2 && cp.distanceTo(me) > 0.3) audio.playWhizz(cp);
 });
 net.on('reloading', (m) => remote.onReload(m.id, m.w));
+// ---- Golden Sniper (these messages only ever come to ME, nobody else is told)
+net.on('goldInfo', (m) => {
+  G.gold = m;
+  if (m.first) {
+    const t = '🏆 SECRET UNLOCKED: GOLDEN SNIPER';
+    hud.notice(t, 5000); vrui.setNotice('GOLDEN SNIPER UNLOCKED', 4); audio.playKill();
+    const f = `🏆 (only you can see this) Buy the Golden Sniper at the GUN SHOP counter for $${m.price}`;
+    hud.feed(esc(f), true); vrui.addFeed(`Golden Sniper: GUN SHOP $${m.price}`);
+  }
+});
+net.on('goldBuy', (m) => {
+  if (m.ok) { if (G.gold) G.gold.own = 1; const t = '🏆 GOLDEN SNIPER ACQUIRED'; hud.notice(t, 4000); vrui.setNotice(t, 3); audio.playKill(); vrInput.pulse('right', 1, 200); }
+  else { toast('🏆 ' + m.why); vrui.setNotice(m.why, 2.5); }
+});
+net.on('goldShot', (m) => gold.confirm(m));
 net.on('dmg', (m) => {
   const p = G.players.get(m.id); if (p) p.hp = m.hp;
   if (m.id === G.room.you) {
@@ -598,6 +625,7 @@ function frame() {
   let moving = false;
 
   if (cut.active) runCutscene(dt, xr);
+  else if (G.bcam) runBulletCam(dt, xr);
   else if (xr) {
     if (pendingVRTeleport) { teleport(pendingVRTeleport.p, pendingVRTeleport.yaw); pendingVRTeleport = null; rig.updateMatrixWorld(true); renderer.xr.updateCamera(camera); }
     const s = vrInput.update();
@@ -723,13 +751,24 @@ function frame() {
         prompt = carPrompt(car, 'Grip');
         if ((st.pressed.grip || st.held.grip) && t - (G.hijackAt || 0) > 0.8) { G.hijackAt = t; net.send({ type: 'hijack', id: car.id }); vrInput.pulse(side, 0.6, 60); }
       }
+      // Golden Sniper counter (only shows for the cop who unlocked it)
+      if (!prompt && !G.ride && goldForSale() && nearGoldCounter(head)) {
+        prompt = `🏆 Squeeze grip to buy the GOLDEN SNIPER ($${G.gold.price})`;
+        if ((L.pressed.grip || R.pressed.grip) && t - (G.buyAt || 0) > 1) { G.buyAt = t; net.send({ type: 'buyGold' }); }
+      }
+      // Golden Sniper: flick the right stick up/down to change the scope zoom
+      if (weapons.current && weapons.current.w === 'golden') {
+        if (Math.abs(R.stick.y) > 0.75 && G.zoomReady !== false) { gold.zoom = R.stick.y < 0 ? 1 : 0; G.zoomReady = false; vrInput.pulse('right', 0.2, 20); }
+        if (Math.abs(R.stick.y) < 0.3) G.zoomReady = true;
+      }
       G.prompt = prompt;
     } else G.prompt = null;
   } else {
     // ---------------------------------------------------------------- desktop
     if (G.view === 'playing') {
-      G.yaw -= desk.mouse.dx * 0.0022 * settings.mouseSens;
-      G.pitch = THREE.MathUtils.clamp(G.pitch - desk.mouse.dy * 0.0022 * settings.mouseSens, -1.5, 1.5);
+      const zs = G.scoped ? camera.fov / settings.fov : 1; // slower aim while zoomed in
+      G.yaw -= desk.mouse.dx * 0.0022 * settings.mouseSens * zs;
+      G.pitch = THREE.MathUtils.clamp(G.pitch - desk.mouse.dy * 0.0022 * settings.mouseSens * zs, -1.5, 1.5);
       if (!Number.isFinite(G.yaw)) G.yaw = 0;
       if (!Number.isFinite(G.pitch)) G.pitch = 0;
       G.showBoard = desk.down('Tab');
@@ -780,13 +819,18 @@ function frame() {
         if (desk.hit('Digit2')) weapons.switchTo(1);
         if (desk.hit('Digit3')) weapons.switchTo(2);
         if (desk.hit('KeyQ')) weapons.cycle(-1);
-        if (desk.mouse.wheel) weapons.cycle(desk.mouse.wheel > 0 ? 1 : -1);
+        if (desk.mouse.wheel && G.scoped) gold.zoom = desk.mouse.wheel < 0 ? 1 : 0;   // scroll = scope zoom
+        else if (desk.mouse.wheel) weapons.cycle(desk.mouse.wheel > 0 ? 1 : -1);
         const eye = camera.getWorldPosition(new THREE.Vector3()), dir = camera.getWorldDirection(new THREE.Vector3());
         const it = G.ride ? null : pickups.aimed(eye, dir, 3);
         G.prompt = it ? `Press E to pick up ${pickups.label(it)}` : null;
         const perp = !it && isCop() ? arrestTarget(walker.feet.clone().setY(walker.feet.y + walker.height - 0.1), 2.4, false) : null;
         if (perp) { G.prompt = `🚔 Press E to ARREST ${perp.info.name}`; if (desk.hit('KeyE')) net.send({ type: 'arrest', id: perp.info.id }); }
         else if (it) { it.highlight = 1; if (desk.hit('KeyE')) net.send({ type: 'pickup', id: it.def.id }); }
+        else if (!G.ride && goldForSale() && nearGoldCounter(walker.feet.clone().setY(walker.feet.y + 1.5))) {
+          G.prompt = `🏆 Press E to buy the GOLDEN SNIPER ($${G.gold.price})`;
+          if (desk.hit('KeyE') && t - (G.buyAt || 0) > 1) { G.buyAt = t; net.send({ type: 'buyGold' }); }
+        }
         else {
           const car = cars.nearest(walker.feet.clone().setY(walker.feet.y + 0.5), 3.9);
           if (G.ride) {
@@ -810,14 +854,34 @@ function frame() {
   rig.updateMatrixWorld(true);
   if (xr) renderer.xr.updateCamera(camera);
 
-  if (weapons.model) weapons.model.visible = !driving.active && !cut.active;
+  // ---- Golden Sniper: scope zoom (desktop right click), ESP outlines, lock-on
+  const goldHeld = inRoom && G.me.alive && !G.matchEnd && weapons.current && weapons.current.w === 'golden' && !driving.active && !cut.active && !prison.prisoner && !G.bcam;
+  G.scoped = !!(goldHeld && !xr && G.view === 'playing' && desk.mouse.right && !weapons.reloading);
+  if (!xr) {
+    const wantFov = G.scoped ? WEAPONS.golden.scopeFov[gold.zoom] : settings.fov;
+    if (camera.fov !== wantFov) { camera.fov = wantFov; camera.updateProjectionMatrix(); }
+  }
+  if (G.scoped) camera.layers.enable(ESP_LAYER); else camera.layers.disable(ESP_LAYER);
+  document.body.classList.toggle('scoped', G.scoped); scopeEl.classList.toggle('hidden', !G.scoped);
+  weapons.lockCone = xr ? 3 : G.scoped ? Math.max(0.8, camera.fov * 0.18) : 2;
+  { const o = new THREE.Vector3(), d = new THREE.Vector3(); if (goldHeld && weapons.model) weapons.aim(o, d);
+    gold.update(dt, { held: goldHeld && !!weapons.model, o, d, cone: weapons.lockCone, show: xr || G.scoped }); }
+  if (goldHeld && gold.lock) {
+    const lk = `🎯 LOCKED: ${gold.lock.kind === 'p' ? (G.players.get(gold.lock.id)?.name || 'Player') : gold.lock.name} · ${Math.round(gold.lock.dist)} m`;
+    if (G.scoped) document.getElementById('scopeLock').textContent = lk; else if (!G.prompt) G.prompt = lk;
+  } else if (G.scoped) document.getElementById('scopeLock').textContent = '';
+  if (G.scoped) document.getElementById('scopeZoom').textContent = `${Math.round(settings.fov / camera.fov)}x`;
+  if (G.blink > 0) { G.blink = Math.max(0, G.blink - dt * 4); blink.visible = true; blink.material.opacity = Math.min(1, G.blink * 1.4); } else blink.visible = false;
+  bulletCamEl.classList.toggle('hidden', !(G.bcam && !G.bcam.xr));
+  if (xr) { const riding = !!(G.bcam && G.bcam.xr); vrHolder.visible = !riding; handL.visible = !riding; } // hands + gun stay behind while you ride the bullet
+  if (weapons.model) weapons.model.visible = !driving.active && !cut.active && !G.scoped && !(G.bcam && G.bcam.xr);
   if (!cut.active && inRoom) prisonInteract(dt, t, xr);
   weapons.update(dt, moving);
   if (G.death) G.death.t -= dt;
   updateRobbery(t, canAct && !driving.active && !cut.active && !prison.prisoner && !(xr && vrui.menuOpen) && (xr || G.view === 'playing'));
 
   // send my pose 20x per second
-  if (inRoom && !cut.active && t - G.lastSend > 1 / 20) { G.lastSend = t; sendState(xr); }
+  if (inRoom && !cut.active && !(G.bcam && G.bcam.xr) && t - G.lastSend > 1 / 20) { G.lastSend = t; sendState(xr); }
 
   remote.update(dt, net.serverNow());
   // friends riding in a car: pin their avatar to the seat of the (interpolated) car so they don't trail behind it
@@ -828,9 +892,10 @@ function frame() {
     q.avatar.root.position.set(s.x - q.head[0], s.y - q.head[1], s.z - q.head[2]);
   }
   for (const [id, p] of remote.players) if (p.head) voice.setPosition(id, p.head[0], p.head[1], p.head[2]);
-  const camPos = camera.getWorldPosition(new THREE.Vector3());
+  const viewCam = G.bcam && !G.bcam.xr ? gold.cam : camera; // desktop bullet cam renders from its own camera
+  const camPos = viewCam.getWorldPosition(new THREE.Vector3());
   pickups.update(dt, t, camPos);
-  npcs.cull = xr ? 34 : 50;
+  npcs.cull = G.scoped ? 320 : G.bcam ? 140 : goldHeld && xr ? 160 : xr ? 34 : 50; // far NPCs must show up in the scope
   npcs.update(dt, net.serverNow(), camPos);
   cars.rideId = G.ride ? G.ride.id : 0;
   cars.update(dt, net.serverNow(), camPos, driving.car, xr);
@@ -839,7 +904,7 @@ function frame() {
   effects.update(dt);
   sky.position.copy(camPos);
   engine.followSun(camPos);
-  const camQ = camera.getWorldQuaternion(new THREE.Quaternion());
+  const camQ = viewCam.getWorldQuaternion(new THREE.Quaternion());
   audio.setListener(camPos, new THREE.Vector3(0, 0, -1).applyQuaternion(camQ), new THREE.Vector3(0, 1, 0).applyQuaternion(camQ));
 
   if (inRoom) {
@@ -856,11 +921,58 @@ function frame() {
       teamText: MODES[G.room.mode].teams ? `RED ${G.room.teamScores[0]} : ${G.room.teamScores[1]} BLUE` : null
     };
     if (cut.active) { st.prompt = null; st.rob = null; st.death = null; st.prison = null; st.sub = null; }
+    if (G.bcam) { st.prompt = null; st.rob = null; if (xr && settings.vignette) st.vignette = 0.55; }
     if (xr) vrui.update(dt, st); else if ((G.view === 'playing' || G.view === 'paused') && !cut.active) hud.update(st);
-    if (!xr) hud.show((G.view === 'playing' || G.view === 'paused') && !cut.active);
+    if (!xr) hud.show((G.view === 'playing' || G.view === 'paused') && !cut.active && !G.bcam);
   }
   desk.endFrame();
-  renderer.render(scene, camera);
+  if (xr && goldHeld && weapons.model) gold.renderScope(renderer, scene, weapons.model, camPos, true); // zoomed view on the scope glass
+  renderer.render(scene, viewCam);
+}
+
+// ------------------------------------------------------------------ Golden Sniper: shop + bullet cam
+function goldForSale() { return isCop() && G.gold && G.gold.unlocked && G.gold.avail && !G.gold.own && G.gold.at; }
+function nearGoldCounter(p) { const a = G.gold.at; return Math.hypot(p.x - a[0], p.z - a[2]) < 2.4 && Math.abs(p.y - (a[1] + 1.5)) < 2.2; }
+function startBulletCam(s) {
+  const end = s.end || s.from.clone().addScaledVector(s.dir, WEAPONS.golden.range);
+  const xr = renderer.xr.isPresenting;
+  gold.fire({ from: s.from, dir: s.dir, lock: s.lock, end, cam: xr ? 'vr' : 'desk' }); // VR rides a bit closer (wider field of view)
+  G.bcam = { xr, t: 0, turned: false, save: xr ? { pos: rig.position.clone(), rotY: rig.rotation.y } : null };
+  if (xr) G.blink = 1;
+  G.scoped = false; document.body.classList.remove('scoped'); scopeEl.classList.add('hidden');
+}
+function runBulletCam(dt, xr) {
+  const bc = G.bcam; bc.t += dt;
+  if (xr) { const s = vrInput.update(); if (s.right.pressed.b || s.left.pressed.b) gold.skip(); }
+  else if (desk.hit('Space') || desk.hit('KeyE') || desk.mouse.rightPressed) gold.skip();
+  if (!G.me.alive || !G.room || bc.t > 4 || bc.xr !== xr) gold.skip();
+  const pose = gold.camPose();
+  G.prompt = null;
+  if (!pose) return endBulletCam();
+  if (xr) {
+    if (!bc.turned) {
+      // face the way the bullet flies (done during the blink so it's comfortable)
+      const head = headWorld(new THREE.Vector3());
+      const camYaw = new THREE.Euler().setFromQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()), 'YXZ').y;
+      const d = pose.look.clone().sub(pose.pos), ang = Math.atan2(-d.x, -d.z) - camYaw;
+      rig.position.sub(head).applyAxisAngle(UP, ang).add(head); rig.rotation.y += ang; bc.turned = true;
+      rig.updateMatrixWorld(true); renderer.xr.updateCamera(camera);
+    }
+    rig.position.add(pose.pos.clone().sub(headWorld(new THREE.Vector3())));
+    rig.updateMatrixWorld(true); renderer.xr.updateCamera(camera);
+  } else {
+    gold.cam.aspect = window.innerWidth / window.innerHeight; gold.cam.updateProjectionMatrix();
+    gold.cam.position.copy(pose.pos); gold.cam.lookAt(pose.look); gold.cam.updateMatrixWorld(true);
+  }
+}
+function endBulletCam() {
+  const bc = G.bcam; G.bcam = null; gold.skip();
+  if (bc && bc.save) {
+    rig.position.copy(bc.save.pos); rig.rotation.y = bc.save.rotY; rig.updateMatrixWorld(true);
+    if (renderer.xr.isPresenting) renderer.xr.updateCamera(camera);
+    vrMover.reset(); vrMover.gorilla.hands.forEach(h => h.init = false);
+    G.blink = 1;
+  }
 }
 
 // Robbery: aim any gun at a shopkeeper from close range and hold it. The server checks
@@ -1080,6 +1192,6 @@ async function start() {
   const unlock = () => { audio.unlock(); if (G.view === 'menu' || G.view === 'lobby') audio.startMusic(); };
   window.addEventListener('pointerdown', unlock, { once: false });
   window.addEventListener('keydown', unlock, { once: true });
-  window.__npcMap = npcs.map; window.__cc = { cars, driving, menuAction: (a) => menuAction(a), G, desk, vrui, vrInput, net, walker, vrMover, weapons, remote, renderer, rig, camera, city, map, world, pickups, scene, prison, prisonView, cut, npcs };
+  window.__npcMap = npcs.map; window.__cc = { cars, driving, menuAction: (a) => menuAction(a), G, desk, vrui, vrInput, net, walker, vrMover, weapons, remote, renderer, rig, camera, city, map, world, pickups, scene, prison, prisonView, cut, npcs, gold };
 }
 start();

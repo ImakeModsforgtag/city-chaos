@@ -163,3 +163,24 @@ input[type=range] { width: 200px; accent-color: var(--pink); }
 #robtext { font-size: 20px; margin-bottom: 6px; }
 #robbar .rb { height: 14px; background: #2a1f55; border: 2px solid var(--ink); border-radius: 8px; overflow: hidden; }
 #robfill { height: 100%; width: 0; background: linear-gradient(90deg, #ffd23f, #7dff9a); transition: width 0.25s; }
+
+/* ---- Golden Sniper: scope + bullet cam ---- */
+#scope { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+#scope .lens { position: absolute; left: 50%; top: 50%; width: 86vmin; height: 86vmin; transform: translate(-50%, -50%); border-radius: 50%;
+  box-shadow: 0 0 0 200vmax #000, inset 0 0 7vmin 2vmin rgba(0, 0, 0, 0.85);
+  background: linear-gradient(#000, #000) center / 100% 1.5px no-repeat, linear-gradient(#000, #000) center / 1.5px 100% no-repeat; }
+#scope .lens::before { content: ''; position: absolute; inset: 0; border-radius: 50%;
+  background: linear-gradient(#000, #000) left center / 31% 7px no-repeat, linear-gradient(#000, #000) right center / 31% 7px no-repeat,
+              linear-gradient(#000, #000) center bottom / 7px 31% no-repeat, linear-gradient(#000, #000) center top / 7px 31% no-repeat,
+              radial-gradient(circle, #000 0 2.5px, transparent 3px) center / 4.6vmin 4.6vmin repeat-x; }
+#scope .lens::after { content: ''; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #ff2a2a; box-shadow: 0 0 6px #ff2a2a; }
+#scope .sinfo { position: absolute; left: 50%; bottom: 19vh; transform: translateX(-50%); display: flex; gap: 18px; align-items: center; color: #ffd76a; font: 700 16px Trebuchet MS, sans-serif; text-shadow: 0 1px 2px #000; white-space: nowrap; }
+#scope .sinfo i { font-style: normal; font-weight: 400; color: #c9b27a; font-size: 13px; }
+#scope #scopeLock { color: #fff; background: rgba(180, 20, 40, 0.75); padding: 3px 10px; border-radius: 6px; }
+#scope #scopeLock:empty { display: none; }
+body.scoped #crosshair { display: none; }
+#bulletcam { position: fixed; left: 0; right: 0; top: 0; bottom: 0; pointer-events: none; z-index: 30;
+  border-top: 9vh solid #000; border-bottom: 9vh solid #000; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 2vh; gap: 4px; }
+#bulletcam.hidden { display: none; }
+#bulletcam b { color: #ffd76a; font: 800 22px Trebuchet MS, sans-serif; letter-spacing: 3px; text-shadow: 0 2px 4px #000; position: absolute; top: 3vh; }
+#bulletcam span { color: #ddd; font: 14px Trebuchet MS, sans-serif; position: absolute; bottom: -6vh; }
