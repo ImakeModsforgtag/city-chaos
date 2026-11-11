@@ -899,6 +899,7 @@ function frame() {
   npcs.update(dt, net.serverNow(), camPos);
   cars.rideId = G.ride ? G.ride.id : 0;
   cars.update(dt, net.serverNow(), camPos, driving.car, xr);
+  city.update(camPos, net.serverNow(), dt);
   prisonView.update(dt, net.serverNow(), camPos, { prisoner: prison.prisoner, myBall: prison.ballHeld && xr, handPos: G.ballHandPos });
   if (prisonView.active) prison.tick(dt);
   effects.update(dt);
@@ -927,6 +928,15 @@ function frame() {
   }
   desk.endFrame();
   if (xr && goldHeld && weapons.model) gold.renderScope(renderer, scene, weapons.model, camPos, true); // zoomed view on the scope glass
+  // automated screenshot tests only: window.__camOverride = { p:[x,y,z], l:[x,y,z] } renders from a free camera
+  if (window.__camOverride && !xr) {
+    const o = window.__camOverride, c = G.tourCam || (G.tourCam = new THREE.PerspectiveCamera(60, 1, 0.1, 900));
+    c.aspect = window.innerWidth / window.innerHeight; c.fov = o.fov || 60; c.updateProjectionMatrix();
+    c.position.set(...o.p); c.lookAt(...o.l); c.updateMatrixWorld(true);
+    if (city.update) city.update(c.position, net.serverNow(), 1 / 60);
+    prisonView.setActive && prisonView.setActive(c.position.z > 285);
+    renderer.render(scene, c); return;
+  }
   renderer.render(scene, viewCam);
 }
 

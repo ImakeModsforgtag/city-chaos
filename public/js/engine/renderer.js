@@ -13,7 +13,7 @@ export function createEngine(canvas) {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x8fd3ff);
-  scene.fog = new THREE.Fog(0xbfe6ff, 70, 260);
+  scene.fog = new THREE.Fog(0xcdebff, 140, 520);   // light atmospheric depth, no grey haze
 
   const camera = new THREE.PerspectiveCamera(settings.fov, window.innerWidth / window.innerHeight, 0.05, 600);
   // The "rig" is the player's body in the world. In VR the headset moves the camera inside it.
@@ -22,16 +22,16 @@ export function createEngine(canvas) {
   scene.add(rig);
 
   // Lights: bright cartoony daylight
-  const hemi = new THREE.HemisphereLight(0xcfeaff, 0xffc89a, 1.6);
+  const hemi = new THREE.HemisphereLight(0xd6ecff, 0xffd2a6, 1.55);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xfff1d6, 2.4);
+  const sun = new THREE.DirectionalLight(0xfff0d2, 2.55);
   sun.position.set(40, 80, 25);
   sun.shadow.camera.left = -45; sun.shadow.camera.right = 45; sun.shadow.camera.top = 45; sun.shadow.camera.bottom = -45;
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 220;
   sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
   scene.add(sun); scene.add(sun.target);
 
-  scene.add(buildSky());
+  const sky = buildSky(); scene.add(sky);
 
   function applyQuality() {
     const inXR = renderer.xr.isPresenting;
@@ -60,9 +60,14 @@ export function createEngine(canvas) {
   });
 
   // keep the shadow camera centered on the player so shadows stay sharp
+  let lastT = performance.now();
   function followSun(p) {
     sun.position.set(p.x + 40, p.y + 80, p.z + 25);
     sun.target.position.set(p.x, p.y, p.z);
+    // clouds drift slowly across the sky; the sky dome stays centered on the player
+    const now = performance.now(), dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+    sky.position.set(p.x, 0, p.z);
+    if (sky.userData.clouds) sky.userData.clouds.rotation.y += dt * 0.006;
   }
   return { renderer, scene, camera, rig, sun, hemi, applyQuality, followSun };
 }
@@ -70,34 +75,40 @@ export function createEngine(canvas) {
 function buildSky() {
   const g = new THREE.SphereGeometry(500, 24, 12);
   const cols = [];
-  const top = new THREE.Color(0x3d8bff), mid = new THREE.Color(0x8fd3ff), hor = new THREE.Color(0xffd6a5);
+  const top = new THREE.Color(0x2f7cf0), mid = new THREE.Color(0x7cc6ff), hor = new THREE.Color(0xd8f0ff), warm = new THREE.Color(0xfff1d6);
   const p = g.attributes.position, c = new THREE.Color();
   for (let i = 0; i < p.count; i++) {
     const y = p.getY(i) / 500;
-    if (y > 0.25) c.copy(mid).lerp(top, Math.min(1, (y - 0.25) / 0.6));
-    else c.copy(hor).lerp(mid, Math.max(0, (y + 0.05) / 0.3));
+    if (y > 0.2) c.copy(mid).lerp(top, Math.min(1, (y - 0.2) / 0.65));
+    else if (y > -0.02) c.copy(hor).lerp(mid, (y + 0.02) / 0.22);
+    else c.copy(warm).lerp(hor, Math.max(0, (y + 0.2) / 0.18));
     cols.push(c.r, c.g, c.b);
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
   const sky = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
   sky.renderOrder = -10;
   const grp = new THREE.Group(); grp.add(sky);
-  // sun disc + puffy low-poly clouds
-  const sunDisc = new THREE.Mesh(new THREE.CircleGeometry(22, 16), new THREE.MeshBasicMaterial({ color: 0xfff3b0, fog: false }));
-  sunDisc.position.set(180, 300, 110); sunDisc.lookAt(0, 0, 0); grp.add(sunDisc);
+  // sun disc with a soft halo
+  const sunDisc = new THREE.Mesh(new THREE.CircleGeometry(20, 24), new THREE.MeshBasicMaterial({ color: 0xfff6c8, fog: false }));
+  const halo = new THREE.Mesh(new THREE.CircleGeometry(38, 24), new THREE.MeshBasicMaterial({ color: 0xfff6c8, fog: false, transparent: true, opacity: 0.25, depthWrite: false }));
+  sunDisc.position.set(180, 300, 110); sunDisc.lookAt(0, 0, 0); halo.position.set(181, 301.5, 111); halo.lookAt(0, 0, 0); grp.add(halo, sunDisc);
+  // puffy cartoon clouds: clusters of round puffs with flat-ish bottoms and soft blue-grey undersides
   const batch = new GeoBatch();
-  const ico = new THREE.IcosahedronGeometry(1, 0);
-  for (let i = 0; i < 22; i++) {
-    const a = (i / 22) * Math.PI * 2 + Math.sin(i * 7) * 0.3, r = 260 + (i % 4) * 40;
-    const cx = Math.cos(a) * r, cy = 95 + (i % 5) * 14, cz = Math.sin(a) * r;
-    const tx = -Math.sin(a), tz = Math.cos(a); // tangent so clouds stretch sideways
-    for (let k = 0; k < 4; k++) {
-      const s = 10 + ((i * 3 + k * 5) % 7) * 2.2, off = k * 11 - 16;
-      batch.geom(ico, trs(cx + tx * off, cy + (k % 2) * 4, cz + tz * off, k, i, 0, s, s * 0.7, s), 0xffffff);
+  const puff = new THREE.IcosahedronGeometry(1, 1);
+  const white = new THREE.Color(0xffffff), under = new THREE.Color(0xc9d9ee), cc = new THREE.Color();
+  let seed = 7; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 26; i++) {
+    const a = (i / 26) * Math.PI * 2 + r() * 0.2, rad = 230 + r() * 140;
+    const cx = Math.cos(a) * rad, cy = 90 + r() * 60, cz = Math.sin(a) * rad, tx = -Math.sin(a), tz = Math.cos(a);
+    const n = 4 + Math.floor(r() * 4), size = 9 + r() * 7;
+    for (let k = 0; k < n; k++) {
+      const off = (k - (n - 1) / 2) * size * 1.15, s = size * (0.75 + r() * 0.55) * (k === Math.floor(n / 2) ? 1.25 : 1);
+      const px = cx + tx * off + (r() - 0.5) * size, py = cy + r() * size * 0.5, pz = cz + tz * off + (r() - 0.5) * size;
+      batch.geom(puff, trs(px, py, pz, r(), r(), 0, s, s * 0.72, s), 0xffffff, (vi, v) => cc.copy(under).lerp(white, Math.min(1, Math.max(0, (v.y - (py - s * 0.5)) / (s * 1.1)))));
     }
   }
-  const clouds = new THREE.Mesh(batch.build(), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, fog: false, emissive: 0x777788 }));
-  grp.add(clouds);
+  const clouds = new THREE.Mesh(batch.build(), new THREE.MeshBasicMaterial({ vertexColors: true, fog: false }));
+  grp.add(clouds); grp.userData.clouds = clouds;
   grp.name = 'sky';
   return grp;
 }

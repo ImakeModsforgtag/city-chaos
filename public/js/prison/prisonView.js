@@ -13,7 +13,7 @@ export class PrisonView {
     this.scene = scene; this.P = map.prison; this.city = cityMeshes;
     this.root = new THREE.Group(); this.root.visible = false; scene.add(this.root);
     const sub = new THREE.Scene();
-    const built = buildCity(sub, { boxes: this.P.boxes.filter(b => !b.door && !b.fence), windows: [], props: this.P.props, labels: this.P.labels });
+    const built = buildCity(sub, { boxes: this.P.boxes.filter(b => !b.door && !b.fence), windows: [], props: this.P.props, labels: this.P.labels }, { chunks: false });
     for (const o of [...sub.children]) this.root.add(o);
     this.built = built;
     this.doors = new Map();
@@ -174,7 +174,7 @@ export class PrisonView {
     if (on === this.active) return;
     this.active = on;
     this.root.visible = on;
-    for (const m of [this.city.solidMesh, this.city.flatMesh, this.city.glowMesh, this.city.signs]) m.visible = !on;
+    for (const m of [this.city.solidMesh, this.city.flatMesh, this.city.glowMesh, this.city.signs, ...(this.city.extra || [])]) m.visible = !on;
   }
 
   pushBall(m) { this.ballBuf.push({ t: m.st || 0, x: m.x, y: m.y, z: m.z }); if (this.ballBuf.length > 10) this.ballBuf.shift(); this.ballHolder = m.h; }

@@ -32,9 +32,11 @@ async def main():
         info = await A.evaluate("""(() => { const s = __cc.map.shops.find(s => s.name === 'GUN SHOP'); for (const [id, n] of __npcMap) if (n.type === 1 && Math.hypot(n.x - s.keeper[0], n.z - s.keeper[2]) < 0.5) return [id, s.keeper[0], s.keeper[2], s.yaw || 0]; })()""")
         await A.evaluate(f"({PLACE})({info[1]}, 0.75, {info[2] + 3.2})"); await A.wait_for_timeout(500)
         await A.evaluate("window.__rs = []; __cc.net.on('robStatus', m => __rs.push(JSON.stringify(m)))")
-        for i in range(20):
-            await A.evaluate(f"__cc.net.send({{ type: 'rob', id: {info[0]} }})"); await A.wait_for_timeout(300)
+        await A.evaluate(f"window.__robT = setInterval(() => __cc.net.send({{ type: 'rob', id: {info[0]} }}), 250)")  # hold like a player
+        for i in range(40):
+            await A.wait_for_timeout(300)
             if await A.evaluate('__cc.G.me.wanted') >= 2: break
+        await A.evaluate('clearInterval(window.__robT)')
         print('robStatus:', (await A.evaluate('__rs.slice(-3)')), 'head', await A.evaluate('__cc.camera.getWorldPosition(new __cc.camera.position.constructor()).toArray().map(v=>+v.toFixed(2))'), 'shop', info)
         pc = await A.evaluate('(() => { const c = [...__cc.cars.map.values()].find(c => c.police); const d = __cc.cars.doorWorld(c); return [c.id, d.x, d.z]; })()')
         await B.bring_to_front(); await B.evaluate(f'__cc.walker.feet.set({pc[1] + 1.2}, 0.3, {pc[2] + 0.4}); __cc.walker.vel.set(0,0,0)'); await B.wait_for_timeout(2200)

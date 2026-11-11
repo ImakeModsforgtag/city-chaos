@@ -2,6 +2,7 @@
 // NPC cars follow lane loops and brake for anything in front of them. When a player hijacks a
 // car, that player's client drives it (instant response) and the server validates + relays it.
 import { roadRoute } from '../public/shared/roads.js';
+import { SIGNALS, signalState } from '../public/shared/cityKit.js';
 import { inPrisonArea } from '../public/shared/prison.js';
 import { NPC_TYPE, NPC_STATE } from './npcs.js';
 
@@ -132,7 +133,18 @@ export class VehicleManager {
       const ahead = dx * fx + dz * fz, side = Math.abs(dx * -fz + dz * fx);
       return ahead > 0.5 && ahead < range && side < half;
     };
-    for (const o of this.cars) if (o !== car && check(o.x, o.z, 8.5, 2.4)) return 'car';
+    for (const o of this.cars) if (o !== car && check(o.x, o.z, 8.5, 2.4)) { car.blocker = o; return 'car'; }
+    // traffic lights: stop at the line on red (and on yellow if there's still room to stop)
+    if (!car.police || !car.siren) {
+      const alongX = Math.abs(fx) > 0.7, alongZ = Math.abs(fz) > 0.7, t = this.room.now();
+      if (alongX || alongZ) for (const [ix, iz] of SIGNALS) {
+        if (alongX ? Math.abs(car.z - iz) > 6 : Math.abs(car.x - ix) > 6) continue;
+        const ahead = alongX ? (ix - car.x) * fx : (iz - car.z) * fz;
+        if (ahead < 8.2 || ahead > 13) continue;
+        const st = signalState(ix, iz, alongX ? 'x' : 'z', t);
+        if (st === 'r' || (st === 'y' && ahead > 10)) return 'light';
+      }
+    }
     for (const p of this.room.players.values()) {
       if (!p.alive || !p.pose || p.inCar || p.ride || p.pose.h[1] > car.y + 3.5) continue;
       if (check(p.pose.h[0], p.pose.h[2], 9, 2.2)) return 'player';
@@ -293,12 +305,14 @@ export class VehicleManager {
       }
       // NPC driving: brake for obstacles, nudge through after waiting a while (no gridlock)
       const why = t < car.pushUntil ? null : this.blocked(car);
+      // waiting in line behind a car that's stopped at a red light is a normal wait, not a jam
+      car.queued = why === 'light' || (why === 'car' && !!car.blocker && !!car.blocker.queued);
       const target = why ? 0 : CRUISE;
       car.speed += Math.max(-14 * dt, Math.min(5 * dt, target - car.speed));
       if (why) {
         if (!car.waitSince) car.waitSince = t;
         if (why === 'player' && t - car.lastHonk > 3) { car.lastHonk = t; this.room.broadcast({ type: 'honk', id: car.id }); }
-        if (why === 'car' && t - car.waitSince > 3) car.pushUntil = t + 2;
+        if (why === 'car' && t - car.waitSince > (car.queued ? 25 : 3)) car.pushUntil = t + 2;
       } else car.waitSince = 0;
       car.s += car.speed * dt;
       this.placeOnLoop(car);

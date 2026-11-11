@@ -275,6 +275,32 @@ Unique items (screwdriver, bolt cutters, keycard, van keys) exist once per room;
 
 ---
 
+## 8c. The city
+
+CITY CHAOS is a 4 by 4 grid of city blocks with its own neighborhoods. Every building, pickup, shop and spawn point
+from before is still in the same place, so nothing about the game changed, only how the city looks and feels.
+
+| Neighborhood | What's there |
+|---|---|
+| Downtown (north east) | **Chaos Tower** (the landmark: glass setbacks, color cycling crown, spire with a beacon), glass offices, Cafe Chaos, a helipad office, the plaza above the parking garage with a statue and art cube |
+| Shopping (north west) | Gun Shop, Snax, Donuts (giant spinning donut on the roof), Mega Mart (rooftop sign with chasing bulbs), Electro (TV billboard), Style Street clothing, striped awnings |
+| City services | Police HQ (flags, badge, parking stalls), Fire Station 7 (walk in: two fire trucks, stairs to the roof), Hospital (helipad, red crosses, ambulance bay), Joe's Auto Repair (car on a lift), Chaos Motors car dealership (cars in the showroom), Hotel Royal |
+| Residential (south) | Six houses with porches, garages, driveways, mailboxes, gardens and picket fences, a backyard pool, the **City Chaos water tower** (sniper on the catwalk), a swing set |
+| Park (west) | Fountain, pond with lily pads, playground, picnic tables, flower beds, lanterns, basketball court |
+| Industrial | Warehouse 9 with loading docks and a semi truck, container yard with a forklift, construction site with a crane |
+
+Streets have double yellow center lines, crosswalks at every corner, stop lines, manholes, **traffic lights at the 9 main
+intersections** (NPC cars stop on red), stop signs at the ring road, street name signs (Main St, Chaos Ave, Pixel Blvd...),
+bus stops, benches, hydrants, trash cans, planters, street trees and parking meters. The edge of the map is a skyline of
+tall buildings. Little things move: rooftop fans spin, flags wave, clouds drift, the fountain splashes, neon signs flicker,
+antennas blink. There are a few hidden details too (look up at Chaos Tower now and then, and check the pond and the gardens).
+
+Climbing: awnings, balconies, bus stop roofs, fences, porches, house roofs, water tanks and the water tower are all solid,
+so gorilla movement can climb them. Small street furniture sits right at the curb so it never blocks the sidewalk.
+
+Performance: the city is split into one batch of meshes per block, so the parts behind you aren't drawn and small details
+switch off past about 95 m. Street level is about 50 draw calls and 90k to 150k triangles (less than before the update).
+
 ## 9. Settings
 - **VR body:** Gorilla (default: true Gorilla Tag physics, no feet, your hands hold you up, eyes about 0.6 to 1m off the ground) / Small (standing, eyes about 1.25m, auto-calibrated to your height; use RECALIBRATE in the VR menu while standing tall) / Human (real height)
 - **VR movement:** Gorilla arms (default) / Arms + stick / Joystick
@@ -299,14 +325,16 @@ city-chaos/
 │   ├── index.html, css/style.css
 │   ├── config.js           game server address (only needed when the website is hosted separately)
 │   ├── shared/             used by BOTH server and browser
-│   │   ├── map.js          the whole city (buildings, stairs, ladders, pickups, spawns)
+│   │   ├── map.js          the whole city: districts, buildings, roofs, houses, signals, street furniture, pickups, spawns
+│   │   ├── cityKit.js      neighborhoods + the traffic light timing (server and browser share it)
 │   │   ├── prison.js       the prison map + all escape objects, zones, cameras, guard routes
 │   │   ├── roads.js        road routing (police cars + the cutscene car)
 │   │   ├── collision.js    collision + raycasting (movement and bullet hits)
 │   │   ├── weapons.js      weapon stats
 │   │   └── constants.js    health, hitboxes, modes, cosmetics list
 │   ├── js/main.js          game flow + frame loop
-│   ├── js/engine/          3D engine: renderer, city builder, effects, geometry batching
+│   ├── js/engine/          3D engine: renderer + sky, city.js (per-block batches + LOD), cityDecor.js (facades, roads,
+│   │                       street furniture, landmarks), cityAnim.js (traffic lights, fans, flags, signs), effects
 │   ├── js/vr/              VR controls (vrInput.js) + in-headset UI (vrUI.js)
 │   ├── js/physics/         Gorilla arm locomotion, walking, VR comfort movement
 │   ├── js/weapons/         weapon models, firing/reload system, pickups

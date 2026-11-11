@@ -5,6 +5,7 @@ async def tp(pg, x, y, z, yaw=None):
     await pg.evaluate(f'__cc.walker.feet.set({x}, {y}, {z}); __cc.walker.vel.set(0,0,0)' + (f'; __cc.G.yaw = {yaw}; __cc.G.pitch = -0.1' if yaw is not None else '')); await pg.wait_for_timeout(700)
 async def arrest_flow(b, vr=False):
     A = await b.new_page(viewport={'width':960,'height':600}); B = await b.new_page(viewport={'width':960,'height':600})
+    for pg in (A, B): await pg.add_init_script("try { const s = JSON.parse(localStorage.getItem('cc_settings') || '{}'); s.quality = 'low'; s.shadows = false; s.moveV2 = 1; localStorage.setItem('cc_settings', JSON.stringify(s)); } catch (e) {}")
     await A.goto('http://localhost:3000'); await A.wait_for_timeout(2500)
     await A.click('[data-goto=create]'); await A.click('[data-action=create]'); await A.wait_for_timeout(900)
     code = await A.inner_text('#lobby-code')
@@ -18,10 +19,13 @@ async def arrest_flow(b, vr=False):
         if not info: continue
         await tp(A, info[1] - math.sin(info[3]) * 3.2, 0.3, info[2] - math.cos(info[3]) * 3.2)
         w0 = await A.evaluate('__cc.G.me.wanted')
-        for i in range(20):
-            await A.evaluate(f"__cc.net.send({{ type: 'rob', id: {info[0]} }})"); await A.wait_for_timeout(300)
+        # hold the robbery like a player would (a timer in the page, so slow test rendering can't break the hold)
+        await A.evaluate(f"window.__robT = setInterval(() => __cc.net.send({{ type: 'rob', id: {info[0]} }}), 250)")
+        for i in range(40):
+            await A.wait_for_timeout(300)
             w = await A.evaluate('__cc.G.me.wanted')
             if w >= 3 or w >= w0 + 2: break
+        await A.evaluate("clearInterval(window.__robT)")
     print('wanted before arrest:', await A.evaluate('__cc.G.me.wanted'))
     af = await A.evaluate('[__cc.walker.feet.x, __cc.walker.feet.y, __cc.walker.feet.z]')
     await B.bring_to_front(); await B.wait_for_timeout(300)

@@ -58,6 +58,23 @@ export class GeoBatch {
     if (g !== geometry) g.dispose();
   }
 
+  // flat up-facing rectangle (road markings, tiles, lawns): 2 triangles
+  floor(x0, z0, x1, z1, y, color) {
+    _c.set(color);
+    this.pos.push(x0, y, z1, x1, y, z1, x1, y, z0, x0, y, z1, x1, y, z0, x0, y, z0);
+    for (let i = 0; i < 6; i++) { this.nor.push(0, 1, 0); this.col.push(_c.r, _c.g, _c.b); }
+  }
+  // one triangle (counter-clockwise when seen from the outside); normal computed from the points
+  tri(a, b, c, color) {
+    _c.set(color);
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+    this.pos.push(...a, ...b, ...c);
+    for (let i = 0; i < 3; i++) { this.nor.push(nx, ny, nz); this.col.push(_c.r, _c.g, _c.b); }
+  }
+  // flat polygon (convex, points in counter-clockwise order seen from the front)
+  poly(pts, color) { for (let i = 1; i < pts.length - 1; i++) this.tri(pts[0], pts[i], pts[i + 1], color); }
+
   build() {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
@@ -67,6 +84,35 @@ export class GeoBatch {
     return g;
   }
   get count() { return this.pos.length / 3; }
+}
+
+// Textured quads that all share one atlas texture (signs, decals): one draw call for all of them.
+export class TexBatch {
+  constructor(cols, rows) { this.cols = cols; this.rows = rows; this.pos = []; this.nor = []; this.uv = []; }
+  // vertical quad centered at (x,y,z), facing direction (nx,nz), w x h meters, showing atlas cell
+  wall(x, y, z, nx, nz, w, h, cell, flipU = false) {
+    const rx = nz, rz = -nx, hw = w / 2, hh = h / 2;            // right vector (when looking at the front)
+    const A = [x - rx * hw, y - hh, z - rz * hw], B = [x + rx * hw, y - hh, z + rz * hw], C = [x + rx * hw, y + hh, z + rz * hw], D = [x - rx * hw, y + hh, z - rz * hw];
+    this._push(A, B, C, D, [nx, 0, nz], cell, flipU);
+  }
+  // flat quad on the ground/roof, rotated by yaw
+  flat(x, y, z, w, d, yaw, cell) {
+    const c = Math.cos(yaw), s = Math.sin(yaw), hw = w / 2, hd = d / 2;
+    const P = (u, v) => [x + u * c + v * s, y, z - u * s + v * c];
+    this._push(P(-hw, hd), P(hw, hd), P(hw, -hd), P(-hw, -hd), [0, 1, 0], cell, false);
+  }
+  _push(A, B, C, D, n, cell, flipU) {
+    const cu = cell % this.cols, cv = Math.floor(cell / this.cols), u0 = cu / this.cols, u1 = (cu + 1) / this.cols, v1 = 1 - cv / this.rows, v0 = 1 - (cv + 1) / this.rows;
+    const ua = flipU ? u1 : u0, ub = flipU ? u0 : u1;
+    this.pos.push(...A, ...B, ...C, ...A, ...C, ...D);
+    for (let i = 0; i < 6; i++) this.nor.push(...n);
+    this.uv.push(ua, v0, ub, v0, ub, v1, ua, v0, ub, v1, ua, v1);
+  }
+  build() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
+    g.computeBoundingSphere(); return g;
+  }
 }
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _e = new THREE.Euler();

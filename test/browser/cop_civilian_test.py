@@ -48,9 +48,11 @@ async def main():
         await B.evaluate(f'__cc.walker.feet.set({info[1]}, 0.2, {info[2] + 3.2}); __cc.walker.vel.set(0,0,0)'); await B.wait_for_timeout(800)
         await B.evaluate("__cc.net.on('robStatus', m => window.__rs = m)")
         await B.evaluate(f'__face({info[1]}, 1.4, {info[2]})')
-        for i in range(25):
-            await B.evaluate(f"__cc.net.send({{ type: 'rob', id: {info[0]} }})"); await B.wait_for_timeout(300)
+        await B.evaluate(f"window.__robT = setInterval(() => __cc.net.send({{ type: 'rob', id: {info[0]} }}), 250)")  # hold like a player
+        for i in range(40):
+            await B.wait_for_timeout(300)
             if await B.evaluate('__cc.G.me.wanted') > 0: break
+        await B.evaluate('clearInterval(window.__robT)')
         print('B dead?', not await B.evaluate('__cc.G.me.alive'));print('B wanted:', await B.evaluate('__cc.G.me.wanted'), 'last robStatus', await B.evaluate('JSON.stringify(window.__rs)'), 'feet', await B.evaluate('__cc.walker.feet.toArray().map(v=>v.toFixed(2))'))
         await A.wait_for_timeout(600)
         print('A sees B stars:', await A.evaluate('(() => { for (const p of __cc.remote.players.values()) return !!p.avatar.stars; })()'))

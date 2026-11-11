@@ -20,9 +20,11 @@ async def main():
         # A robs the gun shop (2 stars) and steals a police car (+2)
         info = await A.evaluate("""(() => { const s = __cc.map.shops.find(s => s.name === 'GUN SHOP'); for (const [id, n] of __npcMap) if (n.type === 1 && Math.hypot(n.x - s.keeper[0], n.z - s.keeper[2]) < 0.5) return [id, s.keeper[0], s.keeper[2]]; })()""")
         await tp(A, info[1], 0.2, info[2] + 3.2)
-        for i in range(25):
-            await A.evaluate(f"__cc.net.send({{ type: 'rob', id: {info[0]} }})"); await A.wait_for_timeout(300)
+        await A.evaluate(f"window.__robT = setInterval(() => __cc.net.send({{ type: 'rob', id: {info[0]} }}), 250)")  # hold like a player
+        for i in range(40):
+            await A.wait_for_timeout(300)
             if await A.evaluate('__cc.G.me.wanted') >= 2: break
+        await A.evaluate('clearInterval(window.__robT)')
         names = await A.evaluate("__cc.map.shops.map(s => s.name)")
         for nm in names:
             if await A.evaluate('__cc.G.me.wanted') >= 3: break
@@ -30,9 +32,11 @@ async def main():
             info2 = await A.evaluate(f"""(() => {{ const s = __cc.map.shops.find(s => s.name === '{nm}'); for (const [id, n] of __npcMap) if (n.type === 1 && Math.hypot(n.x - s.keeper[0], n.z - s.keeper[2]) < 0.5) return [id, s.keeper[0], s.keeper[2], s.yaw || 0]; }})()""")
             if not info2: continue
             await tp(A, info2[1] - __import__('math').sin(info2[3]) * 3.2, 0.3, info2[2] - __import__('math').cos(info2[3]) * 3.2)
-            for i in range(20):
-                await A.evaluate(f"__cc.net.send({{ type: 'rob', id: {info2[0]} }})"); await A.wait_for_timeout(300)
+            await A.evaluate(f"window.__robT = setInterval(() => __cc.net.send({{ type: 'rob', id: {info2[0]} }}), 250)")  # hold like a player
+            for i in range(40):
+                await A.wait_for_timeout(300)
                 if await A.evaluate('__cc.G.me.wanted') >= 3: break
+            await A.evaluate('clearInterval(window.__robT)')
         await A.screenshot(path='/tmp/shots/q1_wanted.png')
         print('A wanted:', await A.evaluate('__cc.G.me.wanted'), '| top HUD:', (await A.inner_text('#wanted')).replace('\n',' '))
         af = await A.evaluate('[__cc.walker.feet.x, __cc.walker.feet.y, __cc.walker.feet.z]')
