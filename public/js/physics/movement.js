@@ -137,7 +137,7 @@ export class Gorilla {
       const avg = new THREE.Vector3(); this.hist.forEach(v => avg.add(v)); avg.divideScalar(this.hist.length);
       if (avg.length() > VEL_LIMIT) {
         avg.multiplyScalar(this.jumpMult);
-        if (avg.length() > MAX_JUMP) avg.setLength(MAX_JUMP);
+        if (avg.length() > MAX_JUMP * (this.capScale || 1)) avg.setLength(MAX_JUMP * (this.capScale || 1));
         this.vel.copy(avg);
       } else this.vel.set(0, 0, 0);
     }
@@ -158,6 +158,7 @@ export class Walker {
     this.feet = new THREE.Vector3(); this.vel = new THREE.Vector3();
     this.grounded = false; this.coyote = 0; this.onLadder = false; this.stepDist = 0;
     this.height = 1.6;
+    this.mods = { speed: 1, jump: 1, fly: false };   // mod menu
   }
   overlaps(x, y, z, scale = 0.95) {
     for (const h of SPHERES) if (h < this.height && this.world.sphereOverlaps(x, y + h, z, WR * scale)) return true;
@@ -195,8 +196,15 @@ export class Walker {
     if (!Number.isFinite(this.vel.x + this.vel.y + this.vel.z)) this.vel.set(0, 0, 0);
     if (!Number.isFinite(this.feet.x + this.feet.y + this.feet.z)) this.feet.set(0, 1, 0);
     if (!Number.isFinite(input.wish.x + input.wish.z)) input.wish.set(0, 0, 0);
+    // mod menu: fly / noclip (free flight through walls, Space up, C down, Shift fast)
+    if (this.mods.fly && input.fly) {
+      const sp = input.sprint ? 30 : 14;
+      this.vel.set(input.fly.x * sp, input.fly.y * sp, input.fly.z * sp);
+      this.feet.addScaledVector(this.vel, dt); this.grounded = false; this.onLadder = false;
+      return events;
+    }
     this.onLadder = this.inLadder();
-    const speed = input.sprint ? 8.2 : 5.6;
+    const speed = (input.sprint ? 8.2 : 5.6) * (this.mods.speed || 1);
     const tx = input.wish.x * speed, tz = input.wish.z * speed;
     const accel = this.grounded ? 14 : (this.onLadder ? 10 : 3.5);
     const k = Math.min(1, accel * dt);
@@ -206,8 +214,9 @@ export class Walker {
       this.vel.y = climb > 0.1 ? 3.6 : climb < -0.1 ? -3 : Math.max(this.vel.y - 30 * dt, -1);
       if (input.jump) { this.vel.y = 5; this.vel.x -= input.wish.x * 4; this.vel.z -= input.wish.z * 4; events.jumped = true; }
     } else {
-      this.vel.y -= 22 * dt;
-      if (input.jump && (this.grounded || this.coyote > 0)) { this.vel.y = 7.4; this.grounded = false; this.coyote = 0; events.jumped = true; }
+      const jm = this.mods.jump || 1;   // mod menu: super jump = stronger jump + floatier gravity
+      this.vel.y -= 22 * dt / Math.sqrt(jm);
+      if (input.jump && (this.grounded || this.coyote > 0)) { this.vel.y = 7.4 * Math.sqrt(jm) * (jm > 1 ? 1.25 : 1); this.grounded = false; this.coyote = 0; events.jumped = true; }
     }
     if (this.vel.y < -30) this.vel.y = -30;
     const wasGrounded = this.grounded;
@@ -380,7 +389,7 @@ export class VRMover {
     const handMove = g.handOffsets(dt, head, hands, useHands, sticking);
     const D = new THREE.Vector3();
     if (handMove) D.copy(handMove);
-    else { g.vel.y -= G * dt; if (g.vel.y < -25) g.vel.y = -25; D.copy(g.vel).multiplyScalar(dt); }
+    else { g.vel.y -= G * (this.gravityScale || 1) * dt; if (g.vel.y < -25) g.vel.y = -25; D.copy(g.vel).multiplyScalar(dt); }
     if (sticking) { D.x += stick.x * 3.2 * dt; D.z += stick.z * 3.2 * dt; }
     if (jump && (this.grounded || handMove)) { g.vel.y = 4.8; D.y = Math.max(D.y, 4.8 * dt); this.grounded = false; }
     const res = this.gtMove(head, D, !!handMove || sticking);
@@ -416,7 +425,7 @@ export class VRMover {
     const D = new THREE.Vector3();
     if (handMove) D.copy(handMove);
     else {
-      if (!this.grounded) g.vel.y -= G * dt;
+      if (!this.grounded) g.vel.y -= G * (this.gravityScale || 1) * dt;
       if (g.vel.y < -25) g.vel.y = -25;
       D.copy(g.vel).multiplyScalar(dt);
     }

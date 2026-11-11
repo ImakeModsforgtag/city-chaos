@@ -97,6 +97,7 @@ export class VRUI {
 
   drawMenu() {
     const m = this.model;
+    if (m.items) return this.drawPage(m);
     const s = m.settings;
     const items = [
       { label: '▶  RESUME', color: '#2ec27e', act: 'resume' },
@@ -110,11 +111,13 @@ export class VRUI {
       { label: `SHADOWS: ${s.shadows ? 'ON' : 'OFF'}`, color: '#8338ec', act: 'shadows' },
       ...(m.teams ? [{ label: 'SWITCH TEAM', color: '#ff9f1c', act: 'team' }] : []),
       ...(m.isHost ? [{ label: `MODE: ${m.mode === 'tdm' ? 'TEAM DEATHMATCH' : 'FREE FOR ALL'} (host)`, color: '#ff3d7f', act: 'mode' }] : []),
+      ...(m.mods ? [{ label: '🛠  MOD MENU', color: '#00b4d8', act: 'mods' }] : []),
       { label: '🚪  LEAVE ROOM', color: '#6c6f8a', act: 'leave' }
     ];
     const key = JSON.stringify(items.map(i => i.label)) + this.hover + m.code;
     // button hit areas are rebuilt EVERY frame (drawing only happens when something changes)
-    this.buttons = items.map((it, i) => ({ x: 80, y: 225 + i * 94, w: 1024 - 160, h: 84, act: it.act }));
+    const step = items.length > 12 ? 87 : 94;
+    this.buttons = items.map((it, i) => ({ x: 80, y: 225 + i * step, w: 1024 - 160, h: step - 10, act: it.act }));
     this.menu.draw(key, (x, w, h) => {
       box(x, 0, 0, w, h, '#fff8ef', 40, INK, 10);
       text(x, 'CITY CHAOS', w / 2, 80, 84, '#ffd23f');
@@ -123,6 +126,23 @@ export class VRUI {
         const b = this.buttons[i];
         box(x, b.x, b.y, b.w, b.h, this.hover === i ? '#ffffff' : it.color, 24, INK, 8);
         text(x, it.label, w / 2, b.y + 44, 40, this.hover === i ? it.color : '#fff');
+      });
+    });
+  }
+
+  // a page with its own buttons (the mod menu): two columns, title + subtitle
+  drawPage(m) {
+    const items = m.items, cols = m.cols || 1, bw = cols === 2 ? 430 : 864, bh = cols === 2 ? 78 : 84, step = cols === 2 ? 86 : 94;
+    this.buttons = items.map((it, i) => ({ x: cols === 2 ? (i % 2 ? 534 : 60) : 80, y: 230 + Math.floor(i / cols) * step, w: bw, h: bh, act: it.act }));
+    const key = 'page' + JSON.stringify(items.map(i => i.label + i.on)) + this.hover + m.title + m.sub;
+    this.menu.draw(key, (x, w, h) => {
+      box(x, 0, 0, w, h, m.bg || '#14102e', 40, '#7cf9ff', 10);
+      text(x, m.title, w / 2, 82, 74, '#7cf9ff');
+      text(x, m.sub || '', w / 2, 160, 34, '#ffd23f');
+      items.forEach((it, i) => {
+        const b = this.buttons[i], c = it.on ? '#00c853' : it.color || '#3d3a6b';
+        box(x, b.x, b.y, b.w, b.h, this.hover === i ? '#ffffff' : c, 22, '#000', 6);
+        text(x, it.label, b.x + b.w / 2, b.y + bh / 2 + 2, it.label.length > 22 ? 26 : 31, this.hover === i ? c : '#fff');
       });
     });
   }

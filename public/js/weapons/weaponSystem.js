@@ -2,6 +2,7 @@
 // the SERVER decides hits, damage, ammo and reload completion (anti-cheat).
 import * as THREE from 'three';
 import { WEAPONS } from '/shared/weapons.js';
+import { effectiveDef } from '/shared/mods.js';
 import { raySphere, rayCapsule } from '/shared/collision.js';
 import { HEAD_RADIUS, BODY_TOP, BODY_BOTTOM, BODY_RADIUS } from '/shared/constants.js';
 import { createWeaponModel } from './models.js';
@@ -25,10 +26,11 @@ export class WeaponSystem {
     this.vrHolder = null;  // set by main to an Object3D on the right controller ray
     this.sway = new THREE.Vector2();
     this.onFire = null;    // callback(weaponId) for haptics
+    this.mods = null;      // mod menu state (infinite ammo, auto, custom gun)
   }
   now() { return performance.now() / 1000; }
   get current() { return this.slots[this.cur] || null; }
-  get def() { const s = this.current; return s ? WEAPONS[s.w] : null; }
+  get def() { const s = this.current; return s ? effectiveDef(s.w, this.mods) : null; }
   get reloading() { return this.now() < this.reloadUntil; }
   reloadProgress() { const d = this.def; if (!d || !this.reloading) return 0; return 1 - (this.reloadUntil - this.now()) / d.reloadTime; }
 
@@ -38,7 +40,8 @@ export class WeaponSystem {
     const holder = this.vr ? this.vrHolder : this.deskHolder;
     // desktop viewmodels are scaled down so the whole gun fits on screen
     const DESK = { pistol: 0.75, revolver: 0.75, smg: 0.8, ar: 0.62, shotgun: 0.58, sniper: 0.5, golden: 0.46, rocket: 0.6 };
-    this.model.scale.setScalar(this.vr ? 1 : (DESK[this.modelId] || 0.7));
+    const did = this.modelId === 'custom' ? ((this.mods && this.mods.custom && this.mods.custom.base) || 'ar') : this.modelId;
+    this.model.scale.setScalar(this.vr ? 1 : (DESK[did] || 0.7));
     if (holder && this.model.parent !== holder) holder.add(this.model);
   }
 
@@ -62,7 +65,7 @@ export class WeaponSystem {
     if (this.model) this.model.parent && this.model.parent.remove(this.model);
     this.model = null; this.modelId = w;
     if (!w) return;
-    this.model = createWeaponModel(w);
+    this.model = createWeaponModel(w, w === 'custom' && this.mods ? this.mods.custom : null);
     this.model.traverse(o => { o.castShadow = false; });
     this.attach();
     this.anim.kick = 0;
@@ -85,6 +88,8 @@ export class WeaponSystem {
     this.equip(this.current.w);
     audio.playReload(this.current.w, 1);
   }
+  // custom gun look changed while holding it: rebuild the model
+  refreshModel() { if (this.current) this.equip(this.current.w); }
   cycle(dir = 1) { if (this.slots.length > 1) this.switchTo((this.cur + dir + this.slots.length) % this.slots.length); }
 
   // aim ray. Desktop: from the eye. VR: from the gun muzzle.
@@ -111,7 +116,7 @@ export class WeaponSystem {
       return false;
     }
     this.nextFire = t + d.fireInterval;
-    s.mag--;
+    if (!(this.mods && this.mods.inf)) s.mag--;   // mod menu: infinite ammo (the server keeps the mag full)
     this.aim(_o, _d);
     const muzzle = new THREE.Vector3(); this.model.userData.muzzle.getWorldPosition(muzzle);
     const dirs = [];

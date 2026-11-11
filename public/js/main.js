@@ -16,6 +16,8 @@ import { Cars, Driving, DRIVER } from './vehicles/cars.js';
 import { Pickups } from './weapons/pickups.js';
 import { WeaponSystem } from './weapons/weaponSystem.js';
 import { GoldenSniper, ESP_LAYER } from './weapons/golden.js';
+import { ModMenu } from './ui/modMenu.js';
+import { SCOPE_FOV, SCOPE_VR_FOV } from '/shared/mods.js';
 import { Walker, VRMover } from './physics/movement.js';
 import { VRInput } from './vr/vrInput.js';
 import { VRUI } from './vr/vrUI.js';
@@ -78,6 +80,10 @@ const voice = new Voice(net);
 const allLadders = map.ladders.concat(map.prison.ladders);
 const walker = new Walker(world, allLadders);
 const vrMover = new VRMover(world, allLadders);
+// the secret mod menu (PC: type MODMENU · Quest: A B A X Y)
+const mods = new ModMenu({ net, walker, vrMover, weapons, hud, vrui, toast: (t) => toast(t), inRoom: () => !!G.room, relock: () => { if (G.view === 'playing' && !renderer.xr.isPresenting) desk.lock && desk.lock(); } });
+const sightEl = document.getElementById('sight');
+net.on('modState', (m) => mods.onServer(m));
 const prison = new PrisonClient({ net, map, world, view: prisonView, npcs });
 const cut = new ArrestCutscene({ scene, camera, rig, map, world, prisonView });
 let pendingTp = null;
@@ -158,7 +164,7 @@ function playDesktop() {
   desk.lock();
 }
 function resumeDesktop() { setView('playing'); desk.lock(); }
-desk.onUnlock = () => { if (G.view === 'playing') setView('paused'); };
+desk.onUnlock = () => { if (G.view === 'playing' && !mods.isOpen()) setView('paused'); };   // the mod panel frees the mouse without pausing
 $('clicktoplay').addEventListener('click', () => desk.lock());
 
 async function enterVR() {
@@ -255,6 +261,7 @@ net.on('error', (m) => { menu.joinError(m.message); toast(m.message); });
 net.on('left', () => {});
 
 net.on('joined', (m) => {
+  setTimeout(() => mods.sync(), 300);
   const reconnect = m.reconnected && G.room && G.room.code === m.code;
   G.room = { code: m.code, you: m.you, mode: m.mode, isPublic: m.isPublic, hostId: m.hostId, killLimit: m.killLimit, timeLimit: m.timeLimit, teamScores: m.teamScores };
   G.players.clear(); remote.clear(); remote.myId = m.you;
@@ -633,7 +640,8 @@ function frame() {
     if (!isGorillaBody()) trackRealHeight(); // Gorilla body has no feet, so no height offset to calibrate
     const head = headWorld(new THREE.Vector3());
     // menu
-    if (L.pressed.b) { if (vrui.menuOpen) vrui.closeMenu(); else if (inRoom) vrui.openMenu(menuModel()); }
+    if (inRoom && mods.vrCode(L, R)) { if (vrui.menuOpen) vrui.closeMenu(); vrui.openMenu(mods.vrModel()); }   // A B A X Y = mod menu
+    else if (L.pressed.b) { if (vrui.menuOpen) { vrui.closeMenu(); mods.vrPage = null; } else if (inRoom) { mods.vrPage = null; vrui.openMenu(menuModel()); } }
     vrui.boardHeld = !!L.held.stick;
     // turning
     const turn = R.stick.x;
@@ -684,7 +692,15 @@ function frame() {
       const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
       const stick = new THREE.Vector3().addScaledVector(right, L.stick.x).addScaledVector(fwd, -L.stick.y);
       const before = rig.position.clone();
-      const ev = vrMover.update(dt, rig, head, hands, { mode: settings.moveMode, stick: settings.moveMode === 'gorilla' ? null : stick, jump: L.pressed.a, armBoost: settings.armBoost, floorOffset: vrFloorOffset(), gt: isGorillaBody() });
+      // mod menu fly: left stick moves where you look (look up to rise), hold the left trigger to go faster
+      const flying = mods.s.fly;
+      if (flying) {
+        const look = new THREE.Vector3(0, 0, -1).applyQuaternion(camQ), side = new THREE.Vector3(1, 0, 0).applyQuaternion(camQ);
+        const v = look.multiplyScalar(-L.stick.y).addScaledVector(side, L.stick.x).multiplyScalar(9 * mods.s.speed * (L.trigger > 0.5 ? 2.5 : 1));
+        rig.position.addScaledVector(v, dt); vrMover.reset(); rig.updateMatrixWorld(true); renderer.xr.updateCamera(camera);
+      }
+      vrMover.gorilla.capScale = mods.s.speed;
+      const ev = flying ? { taps: [], step: false, landed: 0 } : vrMover.update(dt, rig, head, hands, { mode: settings.moveMode, stick: settings.moveMode === 'gorilla' ? null : stick.multiplyScalar(mods.s.speed), jump: L.pressed.a, armBoost: settings.armBoost * mods.s.speed, floorOffset: vrFloorOffset(), gt: isGorillaBody() });
       for (const tp of ev.taps) { audio.playTap(tp.pos, tp.speed); vrInput.pulse(tp.i === 0 ? 'left' : 'right', Math.min(1, 0.15 + tp.speed * 0.1), 25); }
       if (ev.step) audio.playStep(null, 0.7);
       if (ev.landed > 5) audio.playStep(null, 1.4);
@@ -802,7 +818,16 @@ function frame() {
       if (wish.lengthSq() > 1) wish.normalize();
       // rotate local wish into world (yaw)
       const w = new THREE.Vector3(wish.x * Math.cos(G.yaw) + wish.z * Math.sin(G.yaw), 0, -wish.x * Math.sin(G.yaw) + wish.z * Math.cos(G.yaw));
-      const ev = G.ride && rideCar() ? rideHold() : walker.update(dt, { wish: w, sprint: k('ShiftLeft') || k('ShiftRight'), jump: playing && desk.hit('Space'), jumpHeld: k('Space'), climb: k('KeyW') ? 1 : k('KeyS') ? -1 : (k('Space') ? 1 : 0) });
+      // mod menu fly: move where you look (W/S), strafe (A/D), Space up, C or Ctrl down
+      let fly = null;
+      if (walker.mods.fly && playing) {
+        const look = new THREE.Vector3(); camera.getWorldDirection(look);
+        const side = new THREE.Vector3(-look.z, 0, look.x).normalize();
+        fly = new THREE.Vector3().addScaledVector(look, (k('KeyW') ? 1 : 0) - (k('KeyS') ? 1 : 0)).addScaledVector(side, (k('KeyD') ? 1 : 0) - (k('KeyA') ? 1 : 0));
+        fly.y += (k('Space') ? 1 : 0) - (k('KeyC') || k('ControlLeft') ? 1 : 0);
+        if (fly.lengthSq() > 1) fly.normalize();
+      }
+      const ev = G.ride && rideCar() ? rideHold() : walker.update(dt, { wish: w, sprint: k('ShiftLeft') || k('ShiftRight'), jump: playing && desk.hit('Space'), jumpHeld: k('Space'), climb: k('KeyW') ? 1 : k('KeyS') ? -1 : (k('Space') ? 1 : 0), fly });
       if (ev.step) audio.playStep(null, 0.8);
       if (ev.landed) audio.playStep(null, Math.min(1.6, ev.landed / 6));
       moving = wish.lengthSq() > 0.01 && walker.grounded;
@@ -856,16 +881,22 @@ function frame() {
 
   // ---- Golden Sniper: scope zoom (desktop right click), ESP outlines, lock-on
   const goldHeld = inRoom && G.me.alive && !G.matchEnd && weapons.current && weapons.current.w === 'golden' && !driving.active && !cut.active && !prison.prisoner && !G.bcam;
-  G.scoped = !!(goldHeld && !xr && G.view === 'playing' && desk.mouse.right && !weapons.reloading);
+  const cScope = inRoom && G.me.alive && weapons.current && weapons.current.w === 'custom' && !driving.active && !cut.active && !G.bcam ? mods.s.custom.scope : 'none';
+  const scopeFov = goldHeld ? WEAPONS.golden.scopeFov[gold.zoom] : SCOPE_FOV[cScope] || null;
+  G.scoped = !!(scopeFov && !xr && G.view === 'playing' && desk.mouse.right && !weapons.reloading);
+  const dotSight = G.scoped && (cScope === 'reddot' || cScope === 'holo');
+  sightEl.classList.toggle('hidden', !dotSight); sightEl.classList.toggle('holo', cScope === 'holo');
   if (!xr) {
-    const wantFov = G.scoped ? WEAPONS.golden.scopeFov[gold.zoom] : settings.fov;
+    const wantFov = G.scoped ? scopeFov : settings.fov;
     if (camera.fov !== wantFov) { camera.fov = wantFov; camera.updateProjectionMatrix(); }
   }
-  if (G.scoped) camera.layers.enable(ESP_LAYER); else camera.layers.disable(ESP_LAYER);
-  document.body.classList.toggle('scoped', G.scoped); scopeEl.classList.toggle('hidden', !G.scoped);
+  if ((G.scoped && goldHeld) || (mods.s.esp && inRoom)) camera.layers.enable(ESP_LAYER); else camera.layers.disable(ESP_LAYER);
+  document.body.classList.toggle('scoped', G.scoped); scopeEl.classList.toggle('hidden', !G.scoped || dotSight);
   weapons.lockCone = xr ? 3 : G.scoped ? Math.max(0.8, camera.fov * 0.18) : 2;
   { const o = new THREE.Vector3(), d = new THREE.Vector3(); if (goldHeld && weapons.model) weapons.aim(o, d);
-    gold.update(dt, { held: goldHeld && !!weapons.model, o, d, cone: weapons.lockCone, show: xr || G.scoped }); }
+    const esp = mods.s.esp && inRoom && G.me.alive;   // mod menu ESP: outlines through walls without the golden scope
+    if (esp && !goldHeld) { camera.getWorldPosition(o); camera.getWorldDirection(d); }
+    gold.update(dt, { held: (goldHeld && !!weapons.model) || esp, o, d, cone: weapons.lockCone, show: xr || G.scoped || esp }); }
   if (goldHeld && gold.lock) {
     const lk = `🎯 LOCKED: ${gold.lock.kind === 'p' ? (G.players.get(gold.lock.id)?.name || 'Player') : gold.lock.name} · ${Math.round(gold.lock.dist)} m`;
     if (G.scoped) document.getElementById('scopeLock').textContent = lk; else if (!G.prompt) G.prompt = lk;
@@ -875,6 +906,7 @@ function frame() {
   bulletCamEl.classList.toggle('hidden', !(G.bcam && !G.bcam.xr));
   if (xr) { const riding = !!(G.bcam && G.bcam.xr); vrHolder.visible = !riding; handL.visible = !riding; } // hands + gun stay behind while you ride the bullet
   if (weapons.model) weapons.model.visible = !driving.active && !cut.active && !G.scoped && !(G.bcam && G.bcam.xr);
+  if (xr) { const sc = weapons.model && weapons.model.userData.scope; vrui.ammo.mesh.position.set(sc ? 0.085 : 0, sc ? 0.06 : 0.12, 0.06); } // keep the ammo badge out of the scope view
   if (!cut.active && inRoom) prisonInteract(dt, t, xr);
   weapons.update(dt, moving);
   if (G.death) G.death.t -= dt;
@@ -928,6 +960,7 @@ function frame() {
   }
   desk.endFrame();
   if (xr && goldHeld && weapons.model) gold.renderScope(renderer, scene, weapons.model, camPos, true); // zoomed view on the scope glass
+  else if (xr && SCOPE_VR_FOV[cScope] && weapons.model) gold.renderScope(renderer, scene, weapons.model, camPos, true, SCOPE_VR_FOV[cScope]); // custom gun scope
   // automated screenshot tests only: window.__camOverride = { p:[x,y,z], l:[x,y,z] } renders from a free camera
   if (window.__camOverride && !xr) {
     const o = window.__camOverride, c = G.tourCam || (G.tourCam = new THREE.PerspectiveCamera(60, 1, 0.1, 900));
@@ -1152,10 +1185,12 @@ function sendState(xr) {
 }
 
 function menuModel() {
-  return { settings, role: myRole(), mic: G.mic, code: G.room?.code || '', teams: G.room && MODES[G.room.mode].teams, isHost: G.room && G.room.hostId === G.room.you && !G.room.isPublic, mode: G.room?.mode };
+  return { settings, mods: mods.unlocked, role: myRole(), mic: G.mic, code: G.room?.code || '', teams: G.room && MODES[G.room.mode].teams, isHost: G.room && G.room.hostId === G.room.you && !G.room.isPublic, mode: G.room?.mode };
 }
 function menuAction(act) {
-  if (act === 'resume') vrui.closeMenu();
+  if (act === 'mods') mods.vrPage = 'main';
+  else if (act.startsWith('mod:')) { mods.action(act.slice(4)); if (act === 'mod:close') vrui.closeMenu(); }
+  else if (act === 'resume') vrui.closeMenu();
   else if (act === 'move') setSetting('moveMode', { gorilla: 'both', both: 'joystick', joystick: 'gorilla' }[settings.moveMode]);
   else if (act === 'turn') {
     const order = [['snap', 30], ['snap', 45], ['snap', 60], ['smooth', 45], ['off', 45]];
@@ -1177,7 +1212,7 @@ function menuAction(act) {
   else if (act === 'team') net.send({ type: 'switchTeam' });
   else if (act === 'mode') { const m = G.room.mode === 'ffa' ? 'tdm' : 'ffa'; net.send({ type: 'settings', mode: m, killLimit: MODES[m].killLimit, timeLimit: G.room.timeLimit }); }
   else if (act === 'leave') { vrui.closeMenu(); leaveRoom(); }
-  if (vrui.menuOpen) vrui.model = menuModel();
+  if (vrui.menuOpen) vrui.model = mods.vrPage ? mods.vrModel() : menuModel();
 }
 
 weapons.onFire = (w) => { if (renderer.xr.isPresenting) vrInput.pulse('right', Math.min(1, WEAPONS[w].kick * 5 + 0.2), w === 'rocket' || w === 'shotgun' ? 90 : 35); };
@@ -1202,6 +1237,6 @@ async function start() {
   const unlock = () => { audio.unlock(); if (G.view === 'menu' || G.view === 'lobby') audio.startMusic(); };
   window.addEventListener('pointerdown', unlock, { once: false });
   window.addEventListener('keydown', unlock, { once: true });
-  window.__npcMap = npcs.map; window.__cc = { cars, driving, menuAction: (a) => menuAction(a), G, desk, vrui, vrInput, net, walker, vrMover, weapons, remote, renderer, rig, camera, city, map, world, pickups, scene, prison, prisonView, cut, npcs, gold };
+  window.__npcMap = npcs.map; window.__cc = { cars, driving, menuAction: (a) => menuAction(a), G, desk, vrui, vrInput, net, walker, vrMover, weapons, remote, renderer, rig, camera, city, map, world, pickups, scene, prison, prisonView, cut, npcs, gold, mods };
 }
 start();

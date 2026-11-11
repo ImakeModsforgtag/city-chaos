@@ -79,6 +79,7 @@ export class NPCManager {
 
   // ---------------------------------------------------------------- wanted level
   addWanted(p, stars, reason) {
+    if (p.mods && p.mods.ghost) return;   // mod menu: cops ignore me
     if (!p || !p.alive || p.role === 'cop' || p.jail || p.holding) return; // cops can't become wanted; prisoners are already caught
     const before = p.wanted || 0;
     p.wanted = Math.min(5, before + stars);

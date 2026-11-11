@@ -83,7 +83,7 @@ export class RemotePlayers {
       };
       const h = pose(2), l = pose(9), r = pose(16);
       const wi = b[23];
-      av.setWeapon(wi >= 0 ? WEAPON_IDS[wi] : null);
+      av.setWeapon(wi >= 0 ? WEAPON_IDS[wi] : null, p.info && p.info.cg);
       av.setVR(!!b[25]);
       av.setPose(h, l, r, dt);
       p.head = h;

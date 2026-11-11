@@ -7,6 +7,8 @@ import { NPCManager, rayNpc } from './npcs.js';
 import { VehicleManager } from './vehicles.js';
 import { PrisonManager } from './prison.js';
 import { GoldenSniper } from './golden.js';
+import { onMod } from './mods.js';
+import { effectiveDef } from '../public/shared/mods.js';
 import { inPrisonArea } from '../public/shared/prison.js';
 import { WEAPONS, WEAPON_IDS, MAX_SLOTS, DEFAULT_WEAPON, falloff, publicWeapon } from '../public/shared/weapons.js';
 import {
@@ -126,7 +128,7 @@ export class Room {
   publicPlayer(p) {
     return { id: p.id, name: p.name, cos: p.cos, team: p.team, hp: p.hp, alive: p.alive, kills: p.kills,
              deaths: p.deaths, connected: p.connected, vr: p.vr, host: p.id === this.hostId, cash: p.cash || 0, wanted: p.wanted || 0, role: p.role || 'civilian',
-             jail: p.jail ? (p.jail.state === 'cut' ? 1 : p.jail.disguise ? 3 : 2) : 0 };
+             jail: p.jail ? (p.jail.state === 'cut' ? 1 : p.jail.disguise ? 3 : 2) : 0, cg: p.mods && p.mods.custom ? p.mods.custom : null };
   }
 
   fullState(p) {
@@ -175,6 +177,7 @@ export class Room {
       case 'ballThrow': return this.prison.onBallThrow(p, msg.v);
       case 'skipCut': return this.prison.skipCut(p);
       case 'buyGold': return this.gold.onBuy(p);
+      case 'mod': return onMod(this, p, msg);
       case 'testGold': // automated browser tests only (server started with CC_TEST=1)
         if (process.env.CC_TEST === '1') { p.arrests = 5; p.cash = (p.cash || 0) + 1000; this.sendTo(p, this.gold.info(p, { first: 1 })); }
         return;
@@ -338,7 +341,7 @@ export class Room {
     if (p.arrestBy) this.npcs.resistArrest(p, 'shooting');
     const s = p.slots[p.cur];
     if (!p.alive || !s || s.w !== m.w || !p.pose) return this.sendInventory(p);
-    const def = WEAPONS[s.w];
+    const def = effectiveDef(s.w, p.mods);   // mod menu: custom gun stats / auto fire
     if (p.reloadingUntil > t) return this.sendInventory(p);
     if (s.mag <= 0) return this.sendInventory(p);
     if (t - p.lastShot < def.fireInterval * 0.8) return;            // fire-rate cap
@@ -349,6 +352,7 @@ export class Room {
     if (Math.hypot(o[0] - hx, o[1] - hy, o[2] - hz) > 2.6) return;   // muzzle must be near the shooter
     p.lastShot = t;
     s.mag--;
+    if (p.mods && p.mods.inf) s.mag = def.mag;   // mod menu: infinite ammo
     p.protectUntil = 0;
 
     // normalize + validate directions
@@ -422,6 +426,8 @@ export class Room {
       }
     }
     this.broadcast({ type: 'shot', id: p.id, w: s.w, o: o.map(r3), e: ends }, p.id);
+    // mod menu: explosive bullets (and the rocket-based custom gun)
+    if (def.explosive || (p.mods && p.mods.boom)) for (const e of ends.slice(0, 2)) this.explode({ id: this.nextRocketId++, owner: p.id }, e[0], e[1], e[2], null);
     for (const [q, info] of dmgMap) this.damage(q, p, Math.round(info.dmg), s.w, info.head, o);
     for (const [n, info] of npcDmg) this.npcs.damage(n, p, Math.round(info.dmg), info.head, s.w);
     this.sendInventory(p);
@@ -429,6 +435,7 @@ export class Room {
 
   damage(q, attacker, amount, w, head, from) {
     if (!q.alive || amount <= 0) return;
+    if (q.mods && q.mods.god) return;                // mod menu: god mode
     if (q.protectUntil > now()) return;
     if ((q.jail && q.jail.state === 'cut') || q.holding) return;
     // attacking innocent people in public makes you wanted (Free For All only; team matches are a war)
@@ -507,7 +514,7 @@ export class Room {
         if (wd < dist - 0.4) continue;
         dmg = def.splashDamage * (1 - dist / def.splashRadius * 0.7);
       }
-      if (q === owner) dmg *= def.selfDamageMult;
+      if (q === owner) dmg *= (owner.mods && owner.mods.boom) ? 0 : def.selfDamageMult;
       if (dmg > 0) this.damage(q, owner || null, Math.round(dmg), 'rocket', false, [x, y, z]);
     }
   }

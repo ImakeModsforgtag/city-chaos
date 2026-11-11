@@ -172,8 +172,50 @@ const BUILDERS = {
 
 export const SCOPE_Y = 0.16;
 const cache = {};
+const customCache = {};
 // Returns a fresh Group (shares geometry with other copies of the same weapon)
-export function createWeaponModel(id) {
+// ---------------------------------------------------------------- mod menu: Custom Gun (any base gun + skin + scope)
+const SKIN_MAT = {
+  gold: goldMat,
+  chrome: new THREE.MeshPhongMaterial({ color: 0xdfe6ee, shininess: 150, specular: 0xffffff, emissive: 0x1a1d22 }),
+  neon: new THREE.MeshLambertMaterial({ color: 0x10131f, emissive: 0x00c8ff, emissiveIntensity: 0.6 }),
+  galaxy: new THREE.MeshPhongMaterial({ color: 0x2a0f4f, emissive: 0x3d1a7a, shininess: 90, specular: 0xff80ff }),
+  lava: new THREE.MeshLambertMaterial({ color: 0x3a0a00, emissive: 0xff4500, emissiveIntensity: 0.65 }),
+  ice: new THREE.MeshPhongMaterial({ color: 0xb3e5fc, emissive: 0x0277bd, emissiveIntensity: 0.3, shininess: 130, specular: 0xffffff }),
+  rainbow: new THREE.MeshLambertMaterial({ color: 0xff0000, emissive: 0x330000 })
+};
+const SKIN_GLOW = { neon: 0x7cf9ff, galaxy: 0xff80ff, lava: 0xffd54f, ice: 0xe1f5fe, rainbow: 0xffffff, gold: 0xfff1b8, chrome: 0x90caf9, default: 0x7cf9ff };
+let rainbowT = 0;
+// scope pieces on top of the gun. Returns VR scope glass info for the magnified ones.
+function addScope(p, kind, top, zc0) {
+  const B = p.scope, GL = p.glow, blk = 0x1c1e26;
+  if (kind === 'reddot') {
+    B.box(-0.022, top, zc0 - 0.03, 0.022, top + 0.012, zc0 + 0.03, blk);
+    B.box(-0.022, top + 0.012, zc0 - 0.012, 0.022, top + 0.052, zc0 - 0.004, blk); B.box(-0.022, top + 0.012, zc0 - 0.012, -0.017, top + 0.052, zc0 + 0.02, blk); B.box(0.017, top + 0.012, zc0 - 0.012, 0.022, top + 0.052, zc0 + 0.02, blk);
+    GL.geom(sph, trs(0, top + 0.032, zc0 - 0.003, 0, 0, 0, 0.004), 0xff1744);
+    return null;
+  }
+  if (kind === 'holo') {
+    B.box(-0.03, top, zc0 - 0.05, 0.03, top + 0.014, zc0 + 0.03, blk);
+    for (const s of [-1, 1]) B.box(s * 0.03 - 0.004, top + 0.014, zc0 - 0.04, s * 0.03 + 0.004, top + 0.06, zc0 + 0.02, blk);
+    B.box(-0.034, top + 0.06, zc0 - 0.04, 0.034, top + 0.068, zc0 + 0.02, blk);
+    GL.geom(new THREE.TorusGeometry(0.011, 0.0016, 4, 16), trs(0, top + 0.037, zc0 - 0.038, 0, 0, 0), 0xff3d00);
+    GL.geom(sph, trs(0, top + 0.037, zc0 - 0.038, 0, 0, 0, 0.0025), 0xff3d00);
+    return null;
+  }
+  const S = { '2x': [0.016, 0.15], '4x': [0.018, 0.2], '8x': [0.021, 0.26], sniper: [0.025, 0.34] }[kind];
+  if (!S) return null;
+  const [r, L] = S, y = top + 0.035 + r, z0 = zc0 - L * 0.6, z1 = zc0 + L * 0.4;
+  zc(B, 0, y, z0 + 0.03, z1 - 0.025, r, blk);
+  zc(B, 0, y, z0, z0 + 0.04, r * 1.45, blk); zc(B, 0, y, z1 - 0.03, z1, r * 1.25, blk);
+  for (const mz of [z0 + L * 0.3, z0 + L * 0.7]) { B.box(-r * 0.9, top, mz - 0.01, r * 0.9, y - r * 0.6, mz + 0.01, blk); zc(B, 0, y, mz - 0.012, mz + 0.012, r * 1.18, 0x3a3d48); }
+  if (L > 0.18) { B.geom(cyl, trs(0, y + r + 0.012, (z0 + z1) / 2, 0, 0, 0, r * 0.55, 0.026, r * 0.55), blk); B.geom(cyl, trs(r + 0.012, y, (z0 + z1) / 2, 0, 0, Math.PI / 2, r * 0.5, 0.024, r * 0.5), blk); }
+  GL.geom(cyl, trs(0, y, z0 - 0.001, Math.PI / 2, 0, 0, r * 1.3, 0.002, r * 1.3), 0x5a86c7);
+  return { y, eye: z1 + 0.001, front: z0 - 0.01, r: r * 1.15 };
+}
+
+export function createWeaponModel(id, look) {
+  if (id === 'custom') return createCustomModel(look || {});
   if (!cache[id]) {
     const p = mk();
     const info = BUILDERS[id](p, WEAPONS[id].color);
@@ -200,6 +242,47 @@ export function createWeaponModel(id) {
     lens.position.set(0, sc.y, sc.eye); g.add(lens);
     const anchor = new THREE.Object3D(); anchor.position.set(0, sc.y, sc.front); g.add(anchor);   // where the zoom camera sits
     const eye = new THREE.Object3D(); eye.position.set(0, sc.y, sc.eye + 0.07); g.add(eye);        // where your eye should be
+    g.userData.scope = { lens, anchor, eye };
+  }
+  return g;
+}
+
+function createCustomModel(look) {
+  const base = BUILDERS[look.base] && look.base !== 'golden' ? look.base : 'ar', skin = look.skin || 'default', scope = look.scope || 'none';
+  const key = base + '|' + skin + '|' + scope;
+  if (!customCache[key]) {
+    const p = mk(); p.scope = new GeoBatch();
+    const info = BUILDERS[base](p, WEAPONS[base].color);
+    const bb = p.body.build(); bb.computeBoundingBox();
+    const top = base === 'rocket' ? bb.boundingBox.max.y : bb.boundingBox.max.y + 0.002;
+    const zc0 = base === 'pistol' ? -0.06 : base === 'rocket' ? -0.05 : base === 'sniper' ? -0.02 : -0.08;
+    if (scope !== 'none') info.scope = addScope(p, scope, top, zc0);
+    // a little energy strip down the side so every custom gun glows
+    p.glow.box(0.031, top - 0.035, zc0 - 0.12, 0.033, top - 0.025, zc0 + 0.06, SKIN_GLOW[skin] || SKIN_GLOW.default);
+    p.glow.box(-0.033, top - 0.035, zc0 - 0.12, -0.031, top - 0.025, zc0 + 0.06, SKIN_GLOW[skin] || SKIN_GLOW.default);
+    const geos = Object.fromEntries(Object.entries(p).filter(([, b]) => b.count > 0).map(([k, b]) => [k, b.build()]));
+    if (base === 'revolver') { geos.move.translate(0, -0.052, 0.035); info.movePivot = [0, 0.052, -0.035]; }
+    customCache[key] = { info, geos };
+  }
+  const { info, geos } = customCache[key];
+  const g = new THREE.Group(); g.name = 'weapon_custom';
+  const parts = {}, skinMat = SKIN_MAT[skin];
+  for (const [k, geo] of Object.entries(geos)) {
+    const mat = k === 'glow' ? glowMat : k === 'scope' ? sharedMat : (skinMat || ((k === 'gold' || (k === 'move' && info.gold)) ? goldMat : sharedMat));
+    const m = new THREE.Mesh(geo, mat);
+    m.castShadow = k !== 'glow';
+    if (k === 'move' && info.movePivot) m.position.fromArray(info.movePivot);
+    if (skin === 'rainbow' && k === 'body') m.onBeforeRender = () => { const t = performance.now() / 1000; if (t !== rainbowT) { rainbowT = t; SKIN_MAT.rainbow.color.setHSL((t * 0.25) % 1, 0.9, 0.55); SKIN_MAT.rainbow.emissive.setHSL((t * 0.25) % 1, 0.9, 0.15); } };
+    parts[k] = m; g.add(m);
+  }
+  const muzzle = new THREE.Object3D(); muzzle.position.fromArray(info.muzzle); g.add(muzzle);
+  g.userData = { id: base, custom: true, parts, muzzle, magIsMove: !!info.magIsMove };
+  if (info.scope) {
+    const sc = info.scope;
+    const lens = new THREE.Mesh(new THREE.CircleGeometry(sc.r, 24), new THREE.MeshBasicMaterial({ color: 0x0b1626 }));
+    lens.position.set(0, sc.y, sc.eye); g.add(lens);
+    const anchor = new THREE.Object3D(); anchor.position.set(0, sc.y, sc.front); g.add(anchor);
+    const eye = new THREE.Object3D(); eye.position.set(0, sc.y, sc.eye + 0.07); g.add(eye);
     g.userData.scope = { lens, anchor, eye };
   }
   return g;

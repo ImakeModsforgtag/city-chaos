@@ -113,7 +113,7 @@ export class GoldenSniper {
   }
 
   // ---------------------------------------------------------------- VR scope glass
-  renderScope(renderer, scene, model, headPos, xr) {
+  renderScope(renderer, scene, model, headPos, xr, fov) {
     const sc = model && model.userData.scope; if (!sc) return;
     const lens = sc.lens;
     const eye = sc.eye.getWorldPosition(_v);
@@ -128,7 +128,7 @@ export class GoldenSniper {
     if (this.reticle.parent !== model) { model.add(this.reticle); this.reticle.position.copy(sc.lens.position); this.reticle.position.z += 0.0006; }
     this.reticle.visible = true;
     const cam = this.scopeCam;
-    cam.fov = this.zoom ? 3.5 : 8; cam.updateProjectionMatrix();
+    cam.fov = fov || (this.zoom ? 3.5 : 8); cam.updateProjectionMatrix();
     sc.anchor.getWorldPosition(cam.position); sc.anchor.getWorldQuaternion(cam.quaternion); cam.updateMatrixWorld(true);
     const xrOn = renderer.xr.enabled, prev = renderer.getRenderTarget(), shadowAU = renderer.shadowMap.autoUpdate;
     renderer.xr.enabled = false; renderer.shadowMap.autoUpdate = false;

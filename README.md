@@ -301,6 +301,28 @@ so gorilla movement can climb them. Small street furniture sits right at the cur
 Performance: the city is split into one batch of meshes per block, so the parts behind you aren't drawn and small details
 switch off past about 95 m. Street level is about 50 draw calls and 90k to 150k triangles (less than before the update).
 
+## 8d. Secret mod menu
+
+**Unlock it:** on PC type **M O D M E N U** while playing. On Meta Quest press **A, B, A, X, Y** (within 4 seconds).
+After that it stays unlocked on that device: **F8** (or typing MODMENU) opens and closes it on PC, and on Quest it's a
+**MOD MENU** button in the Y menu (A B A X Y also still works).
+
+| Mod | What it does |
+|---|---|
+| Infinite ammo | Your magazine never runs out (the server keeps it full) |
+| Auto fire (any gun) | Every gun fires full auto, at least 8 shots a second |
+| God mode | You take no damage |
+| Explosive bullets | Every hit explodes like a rocket (your own blasts never hurt you) |
+| Cops ignore me | You can't get wanted stars, so no police |
+| ESP: see everyone | Outlines of players (red), cops (blue) and NPCs (yellow) through walls |
+| Fly / noclip | PC: W/A/S/D + Space up, C down, Shift fast. Quest: left stick flies where you look, left trigger = fast |
+| Speed / Super jump | 1x to 3x speed, up to 3x jump with floaty gravity |
+| Heal, +$1000, Clear stars, Give any gun, Teleport | Instant. Teleport spots: Chaos Tower ledge, water tower, helipad, Mega Mart roof and more |
+| **Custom Gun** | Pick the base gun (pistol, SMG, AR, shotgun, sniper, rocket), the scope (red dot, holo, 2x, 4x, 8x, sniper 16x), the look (gold, neon, chrome, rainbow, galaxy, lava, ice), the fire mode (semi, auto, minigun) and the damage (1 to 999). Rocket base = explosive hits. Right click (PC) aims through the scope; on Quest raise the gun to your eye and the scope glass zooms |
+
+Everyone else sees your custom gun's look. Mods only work for players who entered the code. To turn the mod menu off
+on your server, set the environment variable **MODS=off** (on Render: your service > Environment > add MODS = off).
+
 ## 9. Settings
 - **VR body:** Gorilla (default: true Gorilla Tag physics, no feet, your hands hold you up, eyes about 0.6 to 1m off the ground) / Small (standing, eyes about 1.25m, auto-calibrated to your height; use RECALIBRATE in the VR menu while standing tall) / Human (real height)
 - **VR movement:** Gorilla arms (default) / Arms + stick / Joystick
