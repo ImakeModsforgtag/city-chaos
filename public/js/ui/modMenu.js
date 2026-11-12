@@ -70,9 +70,15 @@ export class ModMenu {
     const s = this.s;
     this.weaponMods.inf = s.inf; this.weaponMods.auto = s.auto; this.weaponMods.custom = s.custom;
     this.weapons.mods = this.weaponMods;
-    this.walker.mods = { speed: s.speed, jump: s.jump, fly: s.fly };
-    this.vrMover.gravityScale = 1 / s.jump;
+    const b = this.boost;   // store boosts (energy drink, coffee...) stack on top of the mod speed / jump
+    this.walker.mods = { speed: s.speed * (b ? b.speed : 1), jump: s.jump * (b ? b.jump : 1), fly: s.fly };
+    this.vrMover.gravityScale = 1 / this.walker.mods.jump;
   }
+  speedMul() { return this.walker.mods.speed; }
+  // a speed / jump boost bought at a store, for dur seconds
+  setBoost(b) { this.boost = b ? { speed: b.speed || 1, jump: b.jump || 1, until: performance.now() / 1000 + b.dur } : null; this.apply(); }
+  boostLeft() { return this.boost ? Math.max(0, this.boost.until - performance.now() / 1000) : 0; }
+  tickBoost() { if (this.boost && this.boostLeft() <= 0) { this.boost = null; this.apply(); this.toast('Your boost wore off'); } }
   send(k, v) {
     if (!this.s.unlocked) return;
     if (!this.inRoom()) { this.toast('Join a room first'); return; }

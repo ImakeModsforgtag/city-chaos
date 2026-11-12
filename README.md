@@ -114,7 +114,7 @@ To update later: edit files, then on your Netlify site page go to **Deploys** an
 | Control | Action |
 |---|---|
 | **Hands on the ground + push** | Move like a gorilla. Swing arms back to run, shove down to jump, slap walls to climb. |
-| **Grip (either hand)** | Grab a weapon, ammo or health near your hand. Grab a car to hijack it. As a Cop, grab a wanted player to arrest them. In prison: **hold grip** on objects, grip inmates to talk, grab and throw the basketball |
+| **Grip (either hand)** | Grab a weapon, ammo or health near your hand. Grab a car to hijack it. Near a shopkeeper: open the store. As a Cop, grab a wanted player to arrest them. In prison: **hold grip** on objects, grip inmates to talk, grab and throw the basketball |
 | **Right trigger** | Shoot (hold for automatic weapons) |
 | **A** | Reload |
 | **B** | Switch weapon · skip the arrest cutscene |
@@ -133,9 +133,10 @@ Your **left wrist** shows health, timer and score. The **gun** shows its ammo.
 | Mouse | Look |
 | Left click | Shoot |
 | R | Reload |
-| E | Pick up · hijack a car / get out · arrest (Cop) · talk to inmates · **hold E** to use prison objects |
+| E | Pick up · hijack a car / get out · arrest (Cop) · open a store near a shopkeeper · talk to inmates · **hold E** to use prison objects |
+| Right click (hold) | Aim: scope in, and aim a gun at a shopkeeper to rob the store |
 | L | Police car siren and lights (Cop) |
-| Space | Jump (hold against a ledge to climb up) |
+| Space | Jump · **walk into a wall and hold Space to climb it** (keep holding W and Space; at the top you pull yourself onto the roof or ledge. Let go to drop. Not in prison) |
 | 1 / 2 / 3, mouse wheel, Q | Switch weapon |
 | Tab | Scoreboard |
 | Esc | Pause menu |
@@ -184,7 +185,7 @@ Switching role mid match respawns you right away (no death counted).
 
 **Robbing a store**
 1. Walk into a store with a shopkeeper behind the counter (GUN SHOP, SNAX, DONUTS, MEGA MART, GAS & GO, STAR DINER, ARCADE).
-2. **Aim any gun at the shopkeeper** from close range (within about 6m) and keep aiming. In VR, just point your gun at them.
+2. **Aim any gun at the shopkeeper** from close range (within about 6m) and keep aiming. On PC **hold right click** to aim; in VR **point your gun at them at arm's length**. (Just looking at the clerk with a gun out doesn't rob them, so you can walk in to buy things.)
 3. They put their hands up ("DON'T SHOOT!") and a progress bar fills. Hold your aim for about 4 seconds.
 4. You get **$150 to $500**, the store closes for about 75 seconds, and you get **2 wanted stars ★★**.
 
@@ -239,6 +240,52 @@ Crimes against players and "destruction" only count when somebody sees it (a ped
 - In prison, friends can ride along in the stolen prison van and **escape together**.
 
 ---
+
+## 8-bis. NPC bad guys: robbers and car thieves
+
+Every 35 to 70 seconds a masked robber (black hoodie, black beanie, red bandana, a gun) shows up somewhere in the city.
+There are never more than 2 at once. Each one does one of two jobs:
+- 🏪 **Store robbery:** he walks in through the door, pulls his gun on the clerk ("HANDS UP! EMPTY THE REGISTER!"), and the
+  clerk puts their hands up. After about 6 seconds he grabs the cash, the store closes like after a player robbery, and he
+  runs off carrying a cash bag to a street corner far away, where he disappears.
+- 🚗 **Car theft:** he walks up to a car waiting at a light, throws the driver out (they run off screaming) and floors it,
+  running red lights, for about 45 seconds before he vanishes into traffic.
+
+Everyone sees it in the feed ("A robber is holding up GUN SHOP!", "A car thief stole a car!", "A robber got away with $300").
+Cop players also get the 🚨 alert and siren.
+
+**Stopping them**
+- **Shoot him:** a **$150 bounty** (cops get **$300**) **plus all the cash he stole**. Shooting robbers never gives you wanted stars.
+- **Cop players arrest him:** walk up and press **E** (PC) or **grip him** (VR) for **$250** plus the stolen cash.
+- **He fights back:** a robber shoots at whoever shoots him, and at cops close by while he's on a job. A badly hurt robber with a cop nearby gives up (hands up) and waits to be cuffed.
+- **NPC police** show up about 8 seconds after a store robbery starts, chase him (in through the store door if they need to) and shoot or arrest him. Sometimes he still gets away.
+- **Take the car back:** hijack a stolen car (E / grip) and the thief jumps out and runs. Taking a car back from a thief gives you no wanted stars. Shooting the thief through the window stops the car.
+- To turn robbers off on your server, set the environment variable **CROOKS=off** (Render: your service > Environment).
+
+## 8a. Buying things at the stores
+
+Every store with a shopkeeper sells something. Walk up to the counter and press **E** (PC) or **squeeze grip** (Quest)
+to open the store. On PC click an item or press its number key (1 to 0), **E** or **Esc** leaves. On Quest point the
+laser at an item and pull the trigger, **LEAVE STORE** or **Y** closes it. Walking away closes the store too.
+You pay with the cash you earn from robberies and bounties (shown at the top of the screen and on your left wrist).
+
+| Store | Sells |
+|---|---|
+| 🔫 GUN SHOP | Pistol $100, Revolver $200, SMG $300, Shotgun $350, Assault Rifle $450, Sniper Rifle $700, Rocket Launcher $1200, Ammo Box $40, Body Armor (50) $150, Heavy Armor (100) $300 |
+| 🥔 SNAX | Chips (+20 health) $15, Candy Bar (+30) $20, Fizz Soda (speed boost 30s) $30, Mega Jerky (+60) $45 |
+| 🍩 DONUTS | Glazed Donut (+30) $15, Dozen Donuts (full health) $60, Cop Coffee (speed 45s) $25, Sprinkle Rush (speed + jump 40s) $40 |
+| 🛒 MEGA MART | Bandages (+35) $25, Medkit (full health) $80, Ammo Box $45, Body Armor $170, Running Shoes (1.5x speed 60s) $60 |
+| ⛽ GAS & GO | Energy Drink (speed + jump 40s) $40, Hot Dog (+35) $20, Scratch Ticket $25 (win $40, $200 or $1000), Ammo Box $50 |
+| ⭐ STAR DINER | Star Burger (full health) $50, Fries (+30) $20, Rocket Shake (2x jump 35s) $35, Apple Pie (+50) $30 |
+| 👾 ARCADE | Claw Machine $20 (win $20 to $200), Jackpot Spin $100 (win $100 to $2500), Pixel Power-Up (speed + big jump 30s) $50, Blue Slushie (+25) $15 |
+
+- **Guns:** the new gun goes in your hands (if you already have it you get more ammo). You still carry 3 guns max.
+- **Armor** (🛡 next to your health bar, and on your wrist in VR) takes 70% of every hit until it runs out. You lose it when you're eliminated.
+- **Boosts** (⚡ on screen) stack with the mod menu speed and jump and also work with Gorilla arm movement in VR. They end when you die.
+- **Lottery** prizes are paid straight into your cash; on average the house wins.
+- The store won't take your money for nothing: no food at full health, no ammo when you're full, no smaller armor than you have.
+- You can't shop while a store is closed after a robbery, while the clerk is being robbed (hands up), when the clerk is down, from inside a car, or in prison. The server checks your distance to the counter, that there's no wall in between, and your cash.
+- The secret **Golden Sniper** is now bought from the GUN SHOP menu too: it shows up as the first item, and only for the cop who unlocked it.
 
 ## 8b. Prison: arrest cutscene and escaping
 
@@ -317,7 +364,8 @@ After that it stays unlocked on that device: **F8** (or typing MODMENU) opens an
 | ESP: see everyone | Outlines of players (red), cops (blue) and NPCs (yellow) through walls |
 | Fly / noclip | PC: W/A/S/D + Space up, C down, Shift fast. Quest: left stick flies where you look, left trigger = fast |
 | Speed / Super jump | 1x to 3x speed, up to 3x jump with floaty gravity |
-| Heal, +$1000, Clear stars, Give any gun, Teleport | Instant. Teleport spots: Chaos Tower ledge, water tower, helipad, Mega Mart roof and more |
+| Give gun | Any gun, including the **🏆 Golden Sniper**. There's still only one per game: you become its owner (it comes back when you respawn), and if someone else had it, it quietly disappears from their guns |
+| Heal, +$1000, Clear stars, Teleport | Instant. Teleport spots: Chaos Tower ledge, water tower, helipad, Mega Mart roof and more |
 | **Custom Gun** | Pick the base gun (pistol, SMG, AR, shotgun, sniper, rocket), the scope (red dot, holo, 2x, 4x, 8x, sniper 16x), the look (gold, neon, chrome, rainbow, galaxy, lava, ice), the fire mode (semi, auto, minigun) and the damage (1 to 999). Rocket base = explosive hits. Right click (PC) aims through the scope; on Quest raise the gun to your eye and the scope glass zooms |
 
 Everyone else sees your custom gun's look. Mods only work for players who entered the code. To turn the mod menu off
@@ -341,6 +389,8 @@ city-chaos/
 │   ├── index.js            web server + WebSockets, room codes, reconnects
 │   ├── room.js             authoritative game: hits, damage, ammo, pickups, kills, respawns, modes
 │   ├── npcs.js             pedestrians, shopkeepers, cops, SWAT, robbery, wanted stars, NPC arrests
+│   ├── crooks.js           NPC robbers + car thieves: store holdups, stealing cars, fleeing, fighting back, bounties
+│   ├── shops.js            buying at the stores: counter + cash checks, guns, ammo, food, armor, boosts, lottery
 │   ├── vehicles.js         NPC traffic, police cars, dispatch, the prison van
 │   └── prison.js           arrests, cutscene timer, prison schedule, guards, cameras, alarms, escapes, basketball
 ├── public/                 FRONTEND (what the browser downloads; this folder alone can go on Netlify)
@@ -352,6 +402,7 @@ city-chaos/
 │   │   ├── prison.js       the prison map + all escape objects, zones, cameras, guard routes
 │   │   ├── roads.js        road routing (police cars + the cutscene car)
 │   │   ├── collision.js    collision + raycasting (movement and bullet hits)
+│   │   ├── shops.js        what every store sells and the prices
 │   │   ├── weapons.js      weapon stats
 │   │   └── constants.js    health, hitboxes, modes, cosmetics list
 │   ├── js/main.js          game flow + frame loop
@@ -362,7 +413,7 @@ city-chaos/
 │   ├── js/weapons/         weapon models, firing/reload system, pickups
 │   ├── js/net/             networking (network.js) + voice chat (voice.js)
 │   ├── js/player/          avatars, other players (interpolation), NPC visuals
-│   ├── js/ui/              menus, HUD, settings, desktop input
+│   ├── js/ui/              menus, HUD, settings, desktop input, store menus (shopMenu.js), mod menu
 │   ├── js/prison/          prison visuals, arrest cutscene, prison interactions
 │   ├── js/audio/           synthesized sound effects + music
 │   └── vendor/three/       Three.js (bundled, no internet CDN needed)
@@ -376,6 +427,9 @@ city-chaos/
 ## 11. What was tested, and what still needs your real headset
 
 **Tested and passing:**
+- **NPC robbers and car thieves (`test/server-test-11.mjs`, `test/browser/crook_test.py`):** a robber walks in through the door and robs every one of the 7 stores, the clerk puts their hands up, the store closes, he escapes with the cash; bounty + stolen cash for shooting one with no wanted stars; robbers shooting back; NPC police responding after a delay and getting him; cop players arresting (E) and civilians not; surrendering; car thieves stealing a car at a light, the driver running off, speeding, taking the car back with no stars, shooting the driver stopping the car, the joyride ending; robbers showing up by themselves (max 2) and the CROOKS=off switch. In the browser: the masked robber, the holdup, the cash bag, the car thief in the driver's seat and the cop arrest prompt.
+- **PC wall climbing and mod menu Golden Sniper (`test/browser/wall_climb_test.py`, `test/server-test-9.mjs`):** walking into a wall without Space stays on the ground, holding Space climbs a 9 m building and pulls up onto the roof, letting go drops you, and the mod menu's Give button hands you a working Golden Sniper (scope, ownership, respawn, taken from the old owner).
+- **Stores (`test/server-test-10.mjs`, plus a PC and emulated Quest 3 browser test):** buying at all 7 stores, prices taken and shown to everyone, guns into your hands, ammo boxes, armor soaking 70% of a hit, food healing, speed and jump boosts, lottery payouts, too far / through a wall / wrong store refused, closed after a robbery, scared clerk, dead or jailed players, double clicks, a short Gorilla body buying over the counter, the PC store panel (click and number keys), the VR store page (grip to open, trigger to buy), and the Golden Sniper bought from the GUN SHOP menu on PC and Quest.
 - **Getaway rides (`test/server-test-7.mjs`):** hopping in, seats, 3 passengers max, cops vs civilians, passengers not hit by their own car, driver getting out and back in, passengers getting out, knocked-out passengers leaving, and escaping prison together in the van. Also tested live: a desktop driver with a VR passenger who stays locked to the seat while the car moves, shoots from the car, and is seen in the seat by the driver.
 - **Prison (77 more checks, `test/server-test-6.mjs`):** wanted levels up to 5, NPC cops cuffing you at 3 stars and resisting arrest, SWAT at 4-5, no shooting at 1 star, police SUVs, prison vs holding cell, the cutscene freezing you and taking weapons, skipping it, waking in your own cell, separate cells for friends, schedule + lockdown doors, guards chasing and catching, noises, camera alarms, looped cameras, the electric fence, escape progress shared between players, and every step of all five escape routes (including a real basketball throw scoring), then being caught again.
 - **Server (about 89 automated checks with real WebSocket clients, all passing):** room creation (6-character codes), joining by code (case-insensitive), wrong-code and room-full (9th player) errors, 8 players in one room, position sync, server hit detection with headshots and body shots, ammo tracking, fire-rate cheat blocked, fake-origin and wrong-weapon cheats blocked, bullets blocked by walls, eliminations, kill feed, scores, 5-second respawn, pickups (range-checked, disappear for everyone), reload timing, weapon switching, reconnect with the same player and score, public quick match, Team Deathmatch 4 v 4 split, rocket projectile + splash damage, match ending at the kill limit and auto-restarting, NPCs walking, robbing a store (progress, cash payout, store closing), wanted stars, cops spawning and shooting, NPC hit detection and eliminations, bounty, stars clearing on death, NPC traffic and hijacking, and the Cop/Civilian roles (cop spawns at the station, police cars and siren, cops can't rob, a nearby cop blocks robberies, robbery alerts, police dispatch cars driving the roads, donut-shop cops, arrests with a double bounty, no arresting innocent players, switching roles). Run them with `npm start` in one window and `npm test` in another.

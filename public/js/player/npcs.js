@@ -7,9 +7,9 @@ import { raySphere, rayCapsule } from '/shared/collision.js';
 import { HEAD_RADIUS, BODY_TOP, BODY_BOTTOM, BODY_RADIUS } from '/shared/constants.js';
 import * as audio from '../audio/audio.js';
 
-export const NPC_TYPE = { PED: 0, SHOP: 1, COP: 2, GUARD: 3, PRISONER: 4, SWAT: 5 };
+export const NPC_TYPE = { PED: 0, SHOP: 1, COP: 2, GUARD: 3, PRISONER: 4, SWAT: 5, CROOK: 6 };
 export const NPC_STATE = { WALK: 0, PANIC: 1, HANDSUP: 2, DEAD: 3, AIM: 4, IDLE: 5 };
-export const NPC_NAMES = ['Pedestrian', 'Shopkeeper', 'Cop', 'Prison guard', 'Prisoner', 'SWAT'];
+export const NPC_NAMES = ['Pedestrian', 'Shopkeeper', 'Cop', 'Prison guard', 'Prisoner', 'SWAT', 'Robber'];
 const HEAD_H = 1.55, DELAY = 0.16;
 const SKIN = [0xffdbac, 0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0x5c3a21];
 const SHIRTS = [0xff6b6b, 0x4ecdc4, 0xffe66d, 0x95e1d3, 0xf38181, 0xaa96da, 0xfcbad3, 0x6c5ce7, 0x00b894, 0xfd9644, 0x74b9ff, 0xe17055];
@@ -40,6 +40,18 @@ function donutMesh() {
   }
   return new THREE.Mesh(donutGeo, mat);
 }
+// a sack of stolen cash (robbers carry it while running away)
+let bagGeo = null;
+function lootBag() {
+  if (!bagGeo) {
+    const b = new GeoBatch();
+    b.geom(geo.sphere, trs(0, -0.06, 0, 0, 0, 0, 0.16, 0.18, 0.15), 0xc8a165);
+    b.geom(geo.cyl, trs(0, 0.1, 0, 0, 0, 0, 0.05, 0.08, 0.05), 0xa07c48);
+    b.box(-0.045, -0.1, -0.155, 0.045, 0.0, -0.145, 0x2e8b57);   // green $ patch
+    bagGeo = b.build();
+  }
+  return new THREE.Mesh(bagGeo, mat);
+}
 const rng = (seed) => () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
 
 // merged body geometry (feet at y=0, facing -Z) per (type, look) — cached
@@ -47,7 +59,7 @@ const bodyCache = new Map();
 function bodyGeometry(type, id) {
   const r = rng(id * 7919 + type * 104729 + 1);
   const skin = SKIN[Math.floor(r() * SKIN.length)];
-  const uni = { [NPC_TYPE.COP]: [0x1f3a93, 0x161b33], [NPC_TYPE.GUARD]: [0x6c7a89, 0x2c3e50], [NPC_TYPE.PRISONER]: [0xff7f27, 0xff7f27], [NPC_TYPE.SWAT]: [0x1e272e, 0x111111] }[type];
+  const uni = { [NPC_TYPE.COP]: [0x1f3a93, 0x161b33], [NPC_TYPE.GUARD]: [0x6c7a89, 0x2c3e50], [NPC_TYPE.PRISONER]: [0xff7f27, 0xff7f27], [NPC_TYPE.SWAT]: [0x1e272e, 0x111111], [NPC_TYPE.CROOK]: [0x2b2b33, 0x17171c] }[type];
   const shirt = uni ? uni[0] : SHIRTS[Math.floor(r() * SHIRTS.length)];
   const pants = uni ? uni[1] : PANTS[Math.floor(r() * PANTS.length)];
   const hair = HAIR[Math.floor(r() * HAIR.length)];
@@ -76,6 +88,13 @@ function bodyGeometry(type, id) {
       b.box(0.08, 1.08, -0.146, 0.15, 1.15, -0.141, 0xffd23f);                  // chest badge
       b.box(-0.2, 0.62, -0.17, 0.2, 0.66, 0.17, 0x111111);                      // duty belt
       for (const sx of [-1, 1]) b.box(sx * 0.12 - 0.05, H + 0.02, fz - 0.03, sx * 0.12 + 0.05, H + 0.07, fz - 0.02, 0x111111); // shades
+    } else if (type === NPC_TYPE.CROOK) {
+      b.geom(geo.half, trs(0, H + 0.05, 0, 0, 0, 0, 0.215, 0.19, 0.215), 0x111111);      // black beanie
+      b.box(-0.205, H + 0.0, -0.205, 0.205, H + 0.09, -0.12, 0x111111);                   // beanie rim
+      b.box(-0.2, H - 0.13, -0.215, 0.2, H - 0.01, -0.06, 0xd62f4b);                       // red bandana over the face
+      b.geom(geo.cyl, trs(0, H - 0.12, 0.2, -0.7, 0, 0, 0.035, 0.08, 0.035), 0xd62f4b);    // bandana knot tail (back of the head)
+      b.box(-0.17, 0.95, -0.152, 0.17, 1.2, -0.142, 0x3c3c46);                            // hoodie pocket
+      b.box(-0.06, 1.18, -0.148, 0.06, 1.24, -0.143, 0xbbbbbb);                           // hoodie strings
     } else if (type === NPC_TYPE.SWAT) {
       b.geom(geo.half, trs(0, H + 0.06, 0, 0, 0, 0, 0.235, 0.2, 0.235), 0x111111);   // helmet
       b.box(-0.17, H - 0.0, -0.24, 0.17, H + 0.08, -0.2, 0x2d3436);                  // goggles
@@ -130,10 +149,12 @@ export class NPCs {
     const lh = new THREE.Mesh(handGeo, hm), rh = new THREE.Mesh(handGeo, hm);
     root.add(lh, rh);
     let gun = null;
-    if (type === NPC_TYPE.COP || type === NPC_TYPE.SWAT) { gun = createWeaponModel(type === NPC_TYPE.SWAT ? 'ar' : 'pistol'); rh.add(gun); gun.position.set(0, -0.02, 0.03); }
+    if (type === NPC_TYPE.COP || type === NPC_TYPE.SWAT || type === NPC_TYPE.CROOK) { gun = createWeaponModel(type === NPC_TYPE.SWAT ? 'ar' : type === NPC_TYPE.CROOK && id % 3 === 0 ? 'smg' : 'pistol'); rh.add(gun); gun.position.set(0, -0.02, 0.03); }
+    let bag = null;
+    if (type === NPC_TYPE.CROOK) { bag = lootBag(); lh.add(bag); bag.position.set(0, -0.2, 0); bag.visible = false; }
     root.visible = false;
     this.scene.add(root);
-    return { id, type, root, body, legs, lh, rh, gun, buf: [], state: 0, phase: Math.random() * 10, bubble: null, closed: 0, alive: true, x: 0, y: 0, z: 0, yaw: 0 };
+    return { id, type, root, body, legs, lh, rh, gun, bag, buf: [], state: 0, phase: Math.random() * 10, bubble: null, closed: 0, alive: true, x: 0, y: 0, z: 0, yaw: 0 };
   }
 
   sync(list, st) {
@@ -175,7 +196,7 @@ export class NPCs {
   die(id, color) {
     const n = this.map.get(id); if (!n) return;
     const p = new THREE.Vector3(n.x, n.y + 1.3, n.z);
-    this.effects.pop(p, n.type === NPC_TYPE.COP ? 0x1f3a93 : 0xff6b6b, 0xffdbac);
+    this.effects.pop(p, n.type === NPC_TYPE.COP ? 0x1f3a93 : n.type === NPC_TYPE.CROOK ? 0x2b2b33 : 0xff6b6b, n.type === NPC_TYPE.CROOK ? 0xd62f4b : 0xffdbac);
     audio.playDeath(p);
     n.alive = false; n.root.visible = false;
   }
@@ -196,7 +217,8 @@ export class NPCs {
       n.x = x; n.y = y; n.z = z; n.yaw = yaw;
       const state = B.state;
       const dist = Math.hypot(x - camPos.x, z - camPos.z);
-      n.root.visible = n.alive && state !== NPC_STATE.DEAD && dist < this.cull;
+      n.root.visible = n.alive && state !== NPC_STATE.DEAD && dist < this.cull && !(n.flags & 32);   // 32 = robber driving a stolen car (drawn in the car)
+      if (n.bag) n.bag.visible = !!(n.flags & 64);
       if (n.type === NPC_TYPE.COP && state !== NPC_STATE.DEAD && dist < nearestCop) { nearestCop = dist; copPos = { x, y: y + 2, z }; }
       if (!n.root.visible) continue;
       n.root.position.set(x, y, z); n.root.rotation.y = yaw;
@@ -213,7 +235,8 @@ export class NPCs {
       else if (state === NPC_STATE.AIM) { R.set(0.12, 1.33, -0.48); L.set(0.0, 1.3, -0.4); n.rh.rotation.set(0, 0, 0); }
       else if (n.type === NPC_TYPE.SHOP) { L.set(-0.26, 1.05, -0.28); R.set(0.26, 1.05, -0.28); }
       else { L.set(-0.32, 0.92, -swing * 0.25); R.set(0.32, 0.92, swing * 0.25); if (n.gun) n.rh.rotation.set(0.9, 0, 0); }
-      if (state !== NPC_STATE.AIM && n.gun && n.type === NPC_TYPE.COP && state !== NPC_STATE.WALK) n.rh.rotation.set(0.9, 0, 0);
+      if (state !== NPC_STATE.AIM && n.gun && (n.type === NPC_TYPE.COP || n.type === NPC_TYPE.CROOK) && state !== NPC_STATE.WALK) n.rh.rotation.set(0.9, 0, 0);
+      if (n.gun && n.type === NPC_TYPE.CROOK) n.gun.visible = state !== NPC_STATE.HANDSUP;
       if (n.bubble) n.bubble.position.y = 2.15 + Math.sin(n.phase) * 0.02;
     }
     // police siren from the closest cop

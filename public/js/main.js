@@ -17,6 +17,7 @@ import { Pickups } from './weapons/pickups.js';
 import { WeaponSystem } from './weapons/weaponSystem.js';
 import { GoldenSniper, ESP_LAYER } from './weapons/golden.js';
 import { ModMenu } from './ui/modMenu.js';
+import { ShopMenu } from './ui/shopMenu.js';
 import { SCOPE_FOV, SCOPE_VR_FOV } from '/shared/mods.js';
 import { Walker, VRMover } from './physics/movement.js';
 import { VRInput } from './vr/vrInput.js';
@@ -60,7 +61,7 @@ const remote = new RemotePlayers(scene, effects);
 const npcs = new NPCs(scene, effects);
 const cars = new Cars(scene);
 const driving = new Driving(world, cars);
-const wIcon = (w) => w === 'car' ? '🚗' : w === 'cop' ? '👮' : w === 'arrest' ? '🚔' : w === 'shock' ? '⚡' : (WEAPONS[w] && WEAPONS[w].icon) || '💥';
+const wIcon = (w) => w === 'car' ? '🚗' : w === 'cop' ? '👮' : w === 'robber' ? '🦹' : w === 'arrest' ? '🚔' : w === 'shock' ? '⚡' : (WEAPONS[w] && WEAPONS[w].icon) || '💥';
 const weapons = new WeaponSystem({ scene, camera, effects, net, world, remote });
 weapons.npcs = npcs;
 // the secret Golden Sniper: scope ESP, lock-on headshots, bullet cam
@@ -84,6 +85,17 @@ const vrMover = new VRMover(world, allLadders);
 const mods = new ModMenu({ net, walker, vrMover, weapons, hud, vrui, toast: (t) => toast(t), inRoom: () => !!G.room, relock: () => { if (G.view === 'playing' && !renderer.xr.isPresenting) desk.lock && desk.lock(); } });
 const sightEl = document.getElementById('sight');
 net.on('modState', (m) => mods.onServer(m));
+// store menus (walk up to a shopkeeper: PC E · VR grip)
+const shopMenu = new ShopMenu({ net, map, world, npcs, toast: (t) => toast(t), hud, vrui, audio, myCash: () => G.players.get(G.room?.you)?.cash || 0, goldForSale: () => !!goldForSale(),
+  relock: () => { if (G.view === 'playing' && !renderer.xr.isPresenting) desk.lock && desk.lock(); } });
+net.on('shopResult', (m) => {
+  const p = G.players.get(G.room?.you); if (p && m.cash !== undefined) p.cash = m.cash;
+  if (m.ok && m.kind === 'boost') mods.setBoost(m.boost);
+  if (m.ok && m.kind === 'armor') G.me.armor = m.ap;
+  if (m.ok) vrInput.pulse('right', 0.5, 60);
+  shopMenu.onResult(m);
+});
+net.on('armor', (m) => { G.me.armor = m.ap; });
 const prison = new PrisonClient({ net, map, world, view: prisonView, npcs });
 const cut = new ArrestCutscene({ scene, camera, rig, map, world, prisonView });
 let pendingTp = null;
@@ -164,7 +176,7 @@ function playDesktop() {
   desk.lock();
 }
 function resumeDesktop() { setView('playing'); desk.lock(); }
-desk.onUnlock = () => { if (G.view === 'playing' && !mods.isOpen()) setView('paused'); };   // the mod panel frees the mouse without pausing
+desk.onUnlock = () => { if (G.view === 'playing' && !mods.isOpen() && !shopMenu.isOpen()) setView('paused'); };   // the mod panel frees the mouse without pausing
 $('clicktoplay').addEventListener('click', () => desk.lock());
 
 async function enterVR() {
@@ -209,7 +221,7 @@ function toggleMic() {
 
 function leaveRoom() {
   net.send({ type: 'leave' });
-  cleanupRoom();
+  shopMenu.close(); cleanupRoom();
 }
 function cleanupRoom() {
   G.gold = null; if (G.bcam) endBulletCam(); gold.skip();
@@ -351,7 +363,8 @@ net.on('goldInfo', (m) => {
 });
 net.on('goldBuy', (m) => {
   if (m.ok) { if (G.gold) G.gold.own = 1; const t = '🏆 GOLDEN SNIPER ACQUIRED'; hud.notice(t, 4000); vrui.setNotice(t, 3); audio.playKill(); vrInput.pulse('right', 1, 200); }
-  else { toast('🏆 ' + m.why); vrui.setNotice(m.why, 2.5); }
+  else { toast('🏆 ' + m.why); vrui.setNotice(m.why, 2.5); shopMenu.say(m.why, false); }
+  if (m.cash !== undefined) { const p = G.players.get(G.room?.you); if (p) p.cash = m.cash; }
 });
 net.on('goldShot', (m) => gold.confirm(m));
 net.on('dmg', (m) => {
@@ -381,12 +394,12 @@ net.on('kill', (m) => {
   if (vp && vinfo && !m.silent) { if (m.victim !== G.room.you) effects.pop(vp, vinfo.cos.color, vinfo.cos.accent); audio.playDeath(m.victim === G.room.you ? null : vp); }
   if (!m.silent) {
     const icon = m.w === 'fall' ? '💀' : m.w ? wIcon(m.w) : '💀';
-    const txt = m.w === 'arrest' ? `🚔 ${killer} ARRESTED ${victim}` : m.w === 'cop' ? `👮 Police took down ${victim}` : m.killer && m.killer !== m.victim ? `${killer} ${icon}${m.head ? ' 🎯' : ''} ${victim}` : `${victim} ${icon} wiped out`;
+    const txt = m.w === 'arrest' ? `🚔 ${killer} ARRESTED ${victim}` : m.w === 'cop' ? `👮 Police took down ${victim}` : m.w === 'robber' ? `🦹 A robber took down ${victim}` : m.killer && m.killer !== m.victim ? `${killer} ${icon}${m.head ? ' 🎯' : ''} ${victim}` : `${victim} ${icon} wiped out`;
     hud.feed(esc(txt), m.killer === G.room.you || m.victim === G.room.you); vrui.addFeed(txt);
   }
   if (m.victim === G.room.you) {
     G.me.alive = false; G.me.hp = 0;
-    G.death = { by: m.w === 'arrest' ? `${killer} 🚔 (ARRESTED)` : m.w === 'cop' ? 'the Police 👮' : m.killer && m.killer !== m.victim ? killer : null, t: m.respawnIn };
+    G.death = { by: m.w === 'arrest' ? `${killer} 🚔 (ARRESTED)` : m.w === 'cop' ? 'the Police 👮' : m.w === 'robber' ? 'a Robber 🦹' : m.killer && m.killer !== m.victim ? killer : null, t: m.respawnIn };
   }
   if (m.killer === G.room.you && m.victim !== G.room.you) {
     const t = m.w === 'arrest' ? `🚔 ARRESTED ${victim}!` : m.head ? `🎯 HEADSHOT! ${victim}` : `💥 ELIMINATED ${victim}`;
@@ -398,6 +411,7 @@ net.on('respawn', (m) => {
   if (m.id !== G.room?.you) return;
   if (driving.active) driving.exit();
   G.me.alive = true; G.me.hp = m.hp; G.me.life = m.life; G.death = null;
+  G.me.armor = 0; mods.setBoost(null); shopMenu.close();
   teleport(new THREE.Vector3(...m.p), m.yaw);
   audio.playSpawn();
 });
@@ -493,9 +507,29 @@ net.on('wanted', (m) => {
 });
 // police / roles
 net.on('robAlert', (m) => {
-  const t = `🚨 ${nameOf(m.by)} is robbing ${m.shop}!`;
+  const t = m.crook ? (m.shop === 'a car' ? '🚨 A car thief just stole a car!' : `🚨 A robber is holding up ${m.shop}!`) : `🚨 ${nameOf(m.by)} is robbing ${m.shop}!`;
   hud.notice(t, 2500); vrui.setNotice(t, 2.5); hud.feed(esc(t), true); vrui.addFeed(t);
   audio.playSiren(null); vrInput.pulse('left', 0.6, 100);
+});
+// NPC bad guys: robbers + car thieves
+net.on('crook', (m) => {
+  const me = G.room?.you, cop = isCop();
+  let t = null, mine = false;
+  switch (m.ev) {
+    case 'rob': if (!cop) t = `🦹 A robber is holding up ${m.shop}!`; break;          // cops get the robAlert instead
+    case 'robbed': t = `💰 A robber emptied the register at ${m.shop} ($${m.cash})`; break;
+    case 'car': if (!cop) t = '🦹 A car thief stole a car!'; break;
+    case 'escaped': t = `🦹 A robber got away with $${m.cash}`; break;
+    case 'down': t = '👮 Police took down a robber'; break;
+    case 'arrested': mine = m.by === me; t = m.by ? `🚔 ${nameOf(m.by)} arrested a robber` : '🚔 Police arrested a robber'; if (mine) audio.playCuffs(); break;
+    case 'bounty': {
+      const p = G.players.get(me); if (p) p.cash = m.total;
+      const n = `+$${m.cash} ${m.arrest ? 'ARREST' : 'BOUNTY'}${m.loot ? ` (incl. $${m.loot} stolen cash)` : ''}`;
+      hud.notice('🦹 ' + n, 2500); vrui.setNotice(n, 2.5); audio.playCash(); vrInput.pulse('right', 0.7, 90);
+      return;
+    }
+  }
+  if (t) { hud.feed(esc(t), mine); vrui.addFeed(t); }
 });
 net.on('penalty', (m) => { const t = `👮 -$${m.amt}: ${m.reason}`; hud.notice(t, 1800); vrui.setNotice(t, 1.8); const p = G.players.get(G.room?.you); if (p) p.cash = Math.max(0, (p.cash || 0) - m.amt); });
 net.on('dispatch', (m) => { if (m.target === G.room?.you) { hud.notice('🚓 A POLICE CAR IS ON THE WAY!', 2000); vrui.setNotice('POLICE CAR ON THE WAY!', 2); } });
@@ -641,7 +675,7 @@ function frame() {
     const head = headWorld(new THREE.Vector3());
     // menu
     if (inRoom && mods.vrCode(L, R)) { if (vrui.menuOpen) vrui.closeMenu(); vrui.openMenu(mods.vrModel()); }   // A B A X Y = mod menu
-    else if (L.pressed.b) { if (vrui.menuOpen) { vrui.closeMenu(); mods.vrPage = null; } else if (inRoom) { mods.vrPage = null; vrui.openMenu(menuModel()); } }
+    else if (L.pressed.b) { if (vrui.menuOpen) { vrui.closeMenu(); mods.vrPage = null; shopMenu.close(); } else if (inRoom) { mods.vrPage = null; vrui.openMenu(menuModel()); } }
     vrui.boardHeld = !!L.held.stick;
     // turning
     const turn = R.stick.x;
@@ -699,8 +733,8 @@ function frame() {
         const v = look.multiplyScalar(-L.stick.y).addScaledVector(side, L.stick.x).multiplyScalar(9 * mods.s.speed * (L.trigger > 0.5 ? 2.5 : 1));
         rig.position.addScaledVector(v, dt); vrMover.reset(); rig.updateMatrixWorld(true); renderer.xr.updateCamera(camera);
       }
-      vrMover.gorilla.capScale = mods.s.speed;
-      const ev = flying ? { taps: [], step: false, landed: 0 } : vrMover.update(dt, rig, head, hands, { mode: settings.moveMode, stick: settings.moveMode === 'gorilla' ? null : stick.multiplyScalar(mods.s.speed), jump: L.pressed.a, armBoost: settings.armBoost * mods.s.speed, floorOffset: vrFloorOffset(), gt: isGorillaBody() });
+      vrMover.gorilla.capScale = mods.speedMul();
+      const ev = flying ? { taps: [], step: false, landed: 0 } : vrMover.update(dt, rig, head, hands, { mode: settings.moveMode, stick: settings.moveMode === 'gorilla' ? null : stick.multiplyScalar(mods.speedMul()), jump: L.pressed.a, armBoost: settings.armBoost * mods.speedMul(), floorOffset: vrFloorOffset(), gt: isGorillaBody() });
       for (const tp of ev.taps) { audio.playTap(tp.pos, tp.speed); vrInput.pulse(tp.i === 0 ? 'left' : 'right', Math.min(1, 0.15 + tp.speed * 0.1), 25); }
       if (ev.step) audio.playStep(null, 0.7);
       if (ev.landed > 5) audio.playStep(null, 1.4);
@@ -719,6 +753,8 @@ function frame() {
     if (rc && vrHolder.parent !== rc.ray) { rc.ray.add(vrHolder); vrui.attach(lc ? lc.grip : rig, rc.ray, vrHolder); }
     if (lc && vrui.wrist.mesh.parent !== lc.grip) vrui.attach(lc.grip, rc ? rc.ray : rig, vrHolder);
     // menu pointer
+    if (shopMenu.vrOpen && !vrui.menuOpen) shopMenu.close();
+    if (shopMenu.vrOpen) { shopMenu.update(head, G.me.alive); if (shopMenu.vrOpen) vrui.model = shopMenu.vrModel(); else vrui.closeMenu(); }
     if (vrui.menuOpen) {
       const act = vrui.updatePointer(R.pressed.trigger);
       if (act) menuAction(act);
@@ -739,6 +775,12 @@ function frame() {
         if (!ctl || prompt) continue; // arresting beats grabbing pickups
         const hp = ctl.grip.getWorldPosition(new THREE.Vector3());
         const q = arrestTarget(hp, 1.0, true);
+        const crook = !q ? crookNear(hp, 1.1, true) : null;
+        if (crook) {
+          prompt = '🚔 Grip the robber to ARREST him'; G.arrestPrompt = true;
+          if ((st.pressed.grip || st.held.grip) && t - (G.arrestAt || 0) > 0.8) { G.arrestAt = t; net.send({ type: 'arrestCrook', id: crook.id }); vrInput.pulse(side, 0.9, 120); }
+          continue;
+        }
         if (!q) continue;
         prompt = `🚔 Grip ${q.info.name} to ARREST them`; G.arrestPrompt = true;
         if ((st.pressed.grip || st.held.grip) && t - (G.arrestAt || 0) > 0.8) { G.arrestAt = t; net.send({ type: 'arrest', id: q.info.id }); vrInput.pulse(side, 0.9, 120); }
@@ -767,10 +809,12 @@ function frame() {
         prompt = carPrompt(car, 'Grip');
         if ((st.pressed.grip || st.held.grip) && t - (G.hijackAt || 0) > 0.8) { G.hijackAt = t; net.send({ type: 'hijack', id: car.id }); vrInput.pulse(side, 0.6, 60); }
       }
-      // Golden Sniper counter (only shows for the cop who unlocked it)
-      if (!prompt && !G.ride && goldForSale() && nearGoldCounter(head)) {
-        prompt = `🏆 Squeeze grip to buy the GOLDEN SNIPER ($${G.gold.price})`;
-        if ((L.pressed.grip || R.pressed.grip) && t - (G.buyAt || 0) > 1) { G.buyAt = t; net.send({ type: 'buyGold' }); }
+      // stores: squeeze grip near a shopkeeper to open the store (the Golden Sniper is sold in the GUN SHOP list)
+      const store = !prompt && !G.ride && !vrui.menuOpen ? shopMenu.near(head) : null;
+      if (store) {
+        const why = shopMenu.status(store);
+        prompt = why ? `🛒 ${why}` : `🛒 Squeeze grip to shop at ${store.name}`;
+        if (!why && (L.pressed.grip || R.pressed.grip) && t - (G.buyAt || 0) > 0.6) { G.buyAt = t; shopMenu.openVR(store.name); vrui.openMenu(shopMenu.vrModel()); vrInput.pulse('right', 0.3, 30); }
       }
       // Golden Sniper: flick the right stick up/down to change the scope zoom
       if (weapons.current && weapons.current.w === 'golden') {
@@ -827,7 +871,7 @@ function frame() {
         fly.y += (k('Space') ? 1 : 0) - (k('KeyC') || k('ControlLeft') ? 1 : 0);
         if (fly.lengthSq() > 1) fly.normalize();
       }
-      const ev = G.ride && rideCar() ? rideHold() : walker.update(dt, { wish: w, sprint: k('ShiftLeft') || k('ShiftRight'), jump: playing && desk.hit('Space'), jumpHeld: k('Space'), climb: k('KeyW') ? 1 : k('KeyS') ? -1 : (k('Space') ? 1 : 0), fly });
+      const ev = G.ride && rideCar() ? rideHold() : walker.update(dt, { wish: w, sprint: k('ShiftLeft') || k('ShiftRight'), jump: playing && desk.hit('Space'), jumpHeld: k('Space'), climb: k('KeyW') ? 1 : k('KeyS') ? -1 : (k('Space') ? 1 : 0), fly, canClimb: !prisonView.active && !prison.prisoner });
       if (ev.step) audio.playStep(null, 0.8);
       if (ev.landed) audio.playStep(null, Math.min(1.6, ev.landed / 6));
       moving = wish.lengthSq() > 0.01 && walker.grounded;
@@ -848,13 +892,17 @@ function frame() {
         else if (desk.mouse.wheel) weapons.cycle(desk.mouse.wheel > 0 ? 1 : -1);
         const eye = camera.getWorldPosition(new THREE.Vector3()), dir = camera.getWorldDirection(new THREE.Vector3());
         const it = G.ride ? null : pickups.aimed(eye, dir, 3);
+        let store = null;
         G.prompt = it ? `Press E to pick up ${pickups.label(it)}` : null;
-        const perp = !it && isCop() ? arrestTarget(walker.feet.clone().setY(walker.feet.y + walker.height - 0.1), 2.4, false) : null;
+        const perp = isCop() ? arrestTarget(walker.feet.clone().setY(walker.feet.y + walker.height - 0.1), 2.4, false) : null;
+        const crook = !perp && isCop() ? crookNear(walker.feet.clone().setY(walker.feet.y + walker.height - 0.1), 2.6) : null;
         if (perp) { G.prompt = `🚔 Press E to ARREST ${perp.info.name}`; if (desk.hit('KeyE')) net.send({ type: 'arrest', id: perp.info.id }); }
+        else if (crook) { G.prompt = `🚔 Press E to ARREST the robber${crook.state === 2 ? ' (he gave up)' : ''}`; if (desk.hit('KeyE')) net.send({ type: 'arrestCrook', id: crook.id }); }
         else if (it) { it.highlight = 1; if (desk.hit('KeyE')) net.send({ type: 'pickup', id: it.def.id }); }
-        else if (!G.ride && goldForSale() && nearGoldCounter(walker.feet.clone().setY(walker.feet.y + 1.5))) {
-          G.prompt = `🏆 Press E to buy the GOLDEN SNIPER ($${G.gold.price})`;
-          if (desk.hit('KeyE') && t - (G.buyAt || 0) > 1) { G.buyAt = t; net.send({ type: 'buyGold' }); }
+        else if (!G.ride && (store = shopMenu.near(eye))) {
+          const why = shopMenu.status(store);
+          G.prompt = shopMenu.isOpen() ? null : why ? `🛒 ${why}` : `🛒 Press E to shop at ${store.name}`;
+          if (!why && !shopMenu.isOpen() && desk.hit('KeyE') && performance.now() - (shopMenu.closedAt || 0) > 300) shopMenu.openPC(store.name);
         }
         else {
           const car = cars.nearest(walker.feet.clone().setY(walker.feet.y + 0.5), 3.9);
@@ -910,6 +958,8 @@ function frame() {
   if (!cut.active && inRoom) prisonInteract(dt, t, xr);
   weapons.update(dt, moving);
   if (G.death) G.death.t -= dt;
+  mods.tickBoost();
+  if (!xr && shopMenu.isOpen()) shopMenu.update(camera.getWorldPosition(new THREE.Vector3()), G.me.alive && inRoom && !driving.active && !G.ride);
   updateRobbery(t, canAct && !driving.active && !cut.active && !prison.prisoner && !(xr && vrui.menuOpen) && (xr || G.view === 'playing'));
 
   // send my pose 20x per second
@@ -943,7 +993,7 @@ function frame() {
   if (inRoom) {
     const ws = weapons.current;
     const st = {
-      dt, hp: G.me.hp, weapon: ws, slots: weapons.slots, cur: weapons.cur, reloading: weapons.reloading, reloadP: weapons.reloadProgress(),
+      dt, hp: G.me.hp, armor: G.me.armor || 0, boost: Math.ceil(mods.boostLeft()), weapon: ws, slots: weapons.slots, cur: weapons.cur, reloading: weapons.reloading, reloadP: weapons.reloadProgress(),
       timer: G.matchEnd ? fmt((G.matchResetAt - t)) : fmt(G.remaining), teams: MODES[G.room.mode].teams, teamScores: G.room.teamScores,
       kills: G.players.get(G.room.you)?.kills || 0, deaths: G.players.get(G.room.you)?.deaths || 0,
       prompt: G.prompt, death: G.death, driving: driving.active, cash: G.players.get(G.room.you)?.cash || 0, wanted: G.me.wanted,
@@ -1021,6 +1071,18 @@ function endBulletCam() {
 // Robbery: aim any gun at a shopkeeper from close range and hold it. The server checks
 // distance + line of sight and decides when the register is emptied.
 const _ro = new THREE.Vector3(), _rd = new THREE.Vector3();
+// an NPC robber close enough to cuff (cops only; not one driving a stolen car)
+function crookNear(p, range, hand) {
+  let best = null, bd = range;
+  for (const n of npcs.map.values()) {
+    if (n.type !== NPC_TYPE.CROOK || !n.alive || n.state === 3 || (n.flags & 32) || !n.buf.length) continue;
+    const hy = n.y + 1.55;
+    const d = hand ? Math.min(Math.hypot(p.x - n.x, p.y - hy, p.z - n.z), Math.hypot(p.x - n.x, p.y - (hy - 0.55), p.z - n.z))
+                   : (Math.abs(p.y - hy) < 1.6 ? Math.hypot(p.x - n.x, p.z - n.z) : 99);
+    if (d < bd) { bd = d; best = n; }
+  }
+  return best;
+}
 // a wanted player close enough to arrest (cops only). hand = VR hand position (tight range to their body)
 function arrestTarget(p, range, hand) {
   let best = null, bd = range;
@@ -1055,10 +1117,18 @@ function carPrompt(car, verb) {
   return `🚗 ${verb} to get in`;
 }
 function updateRobbery(t, active) {
-  if (!active || !weapons.current || isCop()) return;
+  if (!active || !weapons.current || isCop() || shopMenu.shop) return;
   weapons.aim(_ro, _rd);
   const hit = npcs.ray(_ro, _rd, 6.5, NPC_TYPE.SHOP);
   if (!hit) return;
+  // robbing takes a deliberate aim, so walking up to buy something never robs the store by accident:
+  // PC = hold right click (aim) · VR = point the gun at arm's length
+  const xr = renderer.xr.isPresenting, head = headWorld(new THREE.Vector3());
+  const aiming = xr ? Math.hypot(_ro.x - head.x, _ro.z - head.z) > 0.38 : desk.mouse.right;
+  if (!aiming) {
+    if (!G.prompt || G.prompt.startsWith('🛒')) G.prompt = (G.prompt ? G.prompt + ' · ' : '') + (xr ? '🔫 point your gun at arm\'s length to rob' : '🔫 hold right click to rob');
+    return;
+  }
   if (world.raycast(_ro.x, _ro.y, _ro.z, _rd.x, _rd.y, _rd.z, hit.t) < hit.t - 0.3) return; // wall/roof in the way
   const n = hit.npc;
   if (!G.rob || t - G.rob.at > 0.9) {
@@ -1189,6 +1259,7 @@ function menuModel() {
 }
 function menuAction(act) {
   if (act === 'mods') mods.vrPage = 'main';
+  else if (act.startsWith('shop:')) { if (act === 'shop:close') { shopMenu.close(); vrui.closeMenu(); } else if (act.startsWith('shop:buy:')) shopMenu.buy(act.slice(9)); }
   else if (act.startsWith('mod:')) { mods.action(act.slice(4)); if (act === 'mod:close') vrui.closeMenu(); }
   else if (act === 'resume') vrui.closeMenu();
   else if (act === 'move') setSetting('moveMode', { gorilla: 'both', both: 'joystick', joystick: 'gorilla' }[settings.moveMode]);
@@ -1212,7 +1283,7 @@ function menuAction(act) {
   else if (act === 'team') net.send({ type: 'switchTeam' });
   else if (act === 'mode') { const m = G.room.mode === 'ffa' ? 'tdm' : 'ffa'; net.send({ type: 'settings', mode: m, killLimit: MODES[m].killLimit, timeLimit: G.room.timeLimit }); }
   else if (act === 'leave') { vrui.closeMenu(); leaveRoom(); }
-  if (vrui.menuOpen) vrui.model = mods.vrPage ? mods.vrModel() : menuModel();
+  if (vrui.menuOpen) vrui.model = shopMenu.vrOpen ? shopMenu.vrModel() : mods.vrPage ? mods.vrModel() : menuModel();
 }
 
 weapons.onFire = (w) => { if (renderer.xr.isPresenting) vrInput.pulse('right', Math.min(1, WEAPONS[w].kick * 5 + 0.2), w === 'rocket' || w === 'shotgun' ? 90 : 35); };
@@ -1237,6 +1308,6 @@ async function start() {
   const unlock = () => { audio.unlock(); if (G.view === 'menu' || G.view === 'lobby') audio.startMusic(); };
   window.addEventListener('pointerdown', unlock, { once: false });
   window.addEventListener('keydown', unlock, { once: true });
-  window.__npcMap = npcs.map; window.__cc = { cars, driving, menuAction: (a) => menuAction(a), G, desk, vrui, vrInput, net, walker, vrMover, weapons, remote, renderer, rig, camera, city, map, world, pickups, scene, prison, prisonView, cut, npcs, gold, mods };
+  window.__npcMap = npcs.map; window.__cc = { cars, driving, menuAction: (a) => menuAction(a), G, desk, vrui, vrInput, net, walker, vrMover, weapons, remote, renderer, rig, camera, city, map, world, pickups, scene, prison, prisonView, cut, npcs, gold, mods, shopMenu };
 }
 start();

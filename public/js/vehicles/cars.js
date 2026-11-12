@@ -130,13 +130,18 @@ export class Cars {
     if (!list) return;
     const seen = new Set();
     for (const a of list) {
-      const [id, x, y, z, yaw, speed, dk, pid, color, , siren] = a;
+      const [id, x, y, z, yaw, speed, dk, pid, color, , siren, crook] = a;
       seen.add(id);
       let c = this.map.get(id);
       if (!c) { c = this.build(id, color); this.map.set(id, c); c.x = x; c.y = y; c.z = z; c.yaw = yaw; }
       c.buf.push({ t: st, x, y, z, yaw, speed });
       if (c.buf.length > 20) c.buf.shift();
       c.driverKind = dk; c.pid = pid;
+      if (!!crook !== !!c.crook) {   // a car thief behind the wheel (masked robber instead of the normal driver)
+        c.crook = !!crook;
+        const d = npcBodyMesh(c.crook ? 6000 + id : 1000 + id, c.crook ? 6 : 0);
+        d.position.copy(c.driver.position); d.scale.copy(c.driver.scale); c.root.remove(c.driver); c.root.add(d); c.driver = d;
+      }
       c.driver.visible = dk === DRIVER.NPC;
       c.siren = !!siren;
     }

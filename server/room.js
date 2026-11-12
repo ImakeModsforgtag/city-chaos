@@ -8,6 +8,7 @@ import { VehicleManager } from './vehicles.js';
 import { PrisonManager } from './prison.js';
 import { GoldenSniper } from './golden.js';
 import { onMod } from './mods.js';
+import { onShopBuy, soakArmor } from './shops.js';
 import { effectiveDef } from '../public/shared/mods.js';
 import { inPrisonArea } from '../public/shared/prison.js';
 import { WEAPONS, WEAPON_IDS, MAX_SLOTS, DEFAULT_WEAPON, falloff, publicWeapon } from '../public/shared/weapons.js';
@@ -44,6 +45,7 @@ export class Room {
     this.code = code;
     this.server = server;
     this.isPublic = !!opts.isPublic;
+    this.crooksOn = opts.crooks !== false && process.env.CROOKS !== 'off';   // NPC robbers + car thieves (env CROOKS=off turns them off)
     this.crimes = opts.crimes !== false;   // player-vs-player crimes (attacking players, destruction). Tests that need a pure deathmatch turn it off.
     this.mode = MODES[opts.mode] ? opts.mode : 'ffa';
     this.killLimit = clamp(Number(opts.killLimit) || MODES[this.mode].killLimit, 5, 200);
@@ -171,15 +173,23 @@ export class Room {
       case 'exitCar': return this.vehicles.onExit(p);
       case 'siren': return this.vehicles.onSiren(p, msg.on);
       case 'arrest': return this.onArrest(p, Math.floor(Number(msg.id)));
+      case 'arrestCrook': return this.npcs.crooks.onArrest(p, Math.floor(Number(msg.id)));
       case 'pAct': return this.prison.onAct(p, String(msg.id || ''));
       case 'pTalk': return this.prison.onTalk(p, Math.floor(Number(msg.id)));
       case 'ballGrab': return this.prison.onBallGrab(p);
       case 'ballThrow': return this.prison.onBallThrow(p, msg.v);
       case 'skipCut': return this.prison.skipCut(p);
       case 'buyGold': return this.gold.onBuy(p);
+      case 'shopBuy': return onShopBuy(this, p, msg);
       case 'mod': return onMod(this, p, msg);
       case 'testGold': // automated browser tests only (server started with CC_TEST=1)
         if (process.env.CC_TEST === '1') { p.arrests = 5; p.cash = (p.cash || 0) + 1000; this.sendTo(p, this.gold.info(p, { first: 1 })); }
+        return;
+      case 'testTp': // automated browser tests only (server started with CC_TEST=1)
+        if (process.env.CC_TEST === '1' && Array.isArray(msg.p)) { this.teleport(p, msg.p.map(Number), Number(msg.yaw) || 0); p.cash = Number(msg.cash) || p.cash; this.broadcast({ type: 'playerUpdate', p: this.publicPlayer(p) }); }
+        return;
+      case 'testCrook': // automated browser tests only: start an NPC robbery / car theft right now
+        if (process.env.CC_TEST === '1') { const C = this.npcs.crooks; C.nextAt = Infinity; const n = msg.job === 'car' ? C.startCarTheft(this.now()) : C.startRobbery(this.now(), msg.shop || null); if (n && msg.noCops) n.noCops = true; this.sendTo(p, { type: 'testCrook', id: n ? n.id : 0, car: n && n.carTarget }); }
         return;
       case 'setRole': {
         const role = msg.role === 'cop' ? 'cop' : 'civilian';
@@ -440,6 +450,7 @@ export class Room {
     if ((q.jail && q.jail.state === 'cut') || q.holding) return;
     // attacking innocent people in public makes you wanted (Free For All only; team matches are a war)
     if (this.crimes && attacker && attacker !== q && attacker.role !== 'cop' && !attacker.jail && !MODES[this.mode].teams && !q.wanted && !attacker.wanted && attacker.pose && this.npcs.witnessed(attacker.pose.h[0], attacker.pose.h[2])) this.npcs.addWanted(attacker, 1, 'attacking a player');
+    amount = soakArmor(this, q, amount);              // body armor bought at a store
     q.hp = Math.max(0, q.hp - amount);
     this.broadcast({ type: 'dmg', id: q.id, by: attacker ? attacker.id : null, amt: amount, hp: q.hp, head: !!head,
                      from: from ? from.map(r3) : null, w: publicWeapon(w) });
@@ -450,6 +461,8 @@ export class Room {
     if (!victim.alive) return;
     this.vehicles.playerGone(victim);
     victim.alive = false; victim.hp = 0;
+    if (victim.armor) { victim.armor = 0; this.sendTo(victim, { type: 'armor', ap: 0 }); }
+    victim.boost = null;
     victim.respawnAt = now() + (silent ? 0.5 : RESPAWN_TIME);
     victim.reloadingUntil = 0;
     if (!silent) victim.deaths++;

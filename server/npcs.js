@@ -3,8 +3,9 @@
 // wanted levels and NPC damage can't be faked by a client.
 import { raySphere, rayCapsule } from '../public/shared/collision.js';
 import { HEAD_RADIUS, BODY_TOP, BODY_BOTTOM, BODY_RADIUS } from '../public/shared/constants.js';
+import { Crooks } from './crooks.js';
 
-export const NPC_TYPE = { PED: 0, SHOP: 1, COP: 2 };
+export const NPC_TYPE = { PED: 0, SHOP: 1, COP: 2, CROOK: 6 };   // 3-5 are prison guards / inmates / SWAT (client)
 export const NPC_STATE = { WALK: 0, PANIC: 1, HANDSUP: 2, DEAD: 3, AIM: 4, IDLE: 5 };
 const HEAD_H = 1.55;            // head height above the NPC's feet (same hitbox as players)
 const PED_COUNT = 18;
@@ -25,6 +26,7 @@ export class NPCManager {
     this.loops = this.buildLoops();
     this.copSpawns = map.spawns.filter(s => s.p[1] < 0.05);
     this.reset();
+    this.crooks = new Crooks(this);   // NPC robbers + car thieves
   }
 
   // ---------------------------------------------------------------- setup
@@ -158,6 +160,13 @@ export class NPCManager {
     if (attacker && attacker.role === 'cop' && n.type === NPC_TYPE.COP) return; // no friendly fire between cops
     n.hp -= amount;
     this.room.broadcast({ type: 'npcHit', id: n.id, by: attacker ? attacker.id : null, amt: amount, head: !!head });
+    if (n.type === NPC_TYPE.CROOK) {   // robbers: no wanted stars for shooting them, a bounty for taking them down
+      if (n.hp > 0) return this.crooks.onHurt(n, attacker, this.room.now());
+      n.state = NPC_STATE.DEAD; n.respawnAt = this.room.now() + 4; n.surrender = 0;
+      this.room.broadcast({ type: 'npcDie', id: n.id, by: attacker ? attacker.id : null, w: w === 'golden' ? 'sniper' : w, head: !!head, kind: n.type, x: r2(n.x), y: r2(n.y), z: r2(n.z) });
+      if (w === 'golden' && attacker) this.room.sendTo(attacker, { type: 'npcDie', id: n.id, by: attacker.id, w, head: !!head, kind: n.type, x: r2(n.x), y: r2(n.y), z: r2(n.z) });
+      return this.crooks.onDeath(n, attacker);
+    }
     if (attacker && n.type === NPC_TYPE.PED && !attacker.wanted && attacker.role !== 'cop') this.addWanted(attacker, 1, 'shooting civilians');
     if (attacker && n.type === NPC_TYPE.COP) { attacker.shotCop = this.room.now(); n.target = attacker.id; this.addWanted(attacker, 0, 'cop'); if (!attacker.wanted) this.addWanted(attacker, 1, 'assault'); }
     if (n.hp > 0) {
@@ -233,6 +242,52 @@ export class NPCManager {
     return this.add({ type: NPC_TYPE.COP, x, y, z, yaw: 0, hp, maxHp: hp, state: NPC_STATE.WALK, target: p.id, donut, swat,
                       nextShot: this.room.now() + 1.5, lastProgress: this.room.now(), progX: x, progZ: z, side: 0, sideUntil: 0, idleSince: 0 });
   }
+  // NPC cops sent after an NPC robber
+  spawnCopForCrook(x, z, crook) {
+    if (this.copCount() >= MAX_COPS) return null;
+    return this.add({ type: NPC_TYPE.COP, x, y: this.floorAt(x, z, 0.2), z, yaw: 0, hp: 80, maxHp: 80, state: NPC_STATE.WALK, target: null, crook: crook.id,
+                      nextShot: this.room.now() + 1.2, lastProgress: this.room.now(), progX: x, progZ: z, side: 0, sideUntil: 0, idleSince: 0 });
+  }
+  updateCopVsCrook(n, dt, t) {
+    const c = this.list.find(q => q.id === n.crook && q.state !== NPC_STATE.DEAD && !q.remove);
+    if (!c || c.car) { n.crook = null; return this.updateCop(n, dt, t); }
+    n.idleSince = 0;
+    const hx = n.x, hy = n.y + HEAD_H, hz = n.z;
+    const dx = c.x - hx, dz = c.z - hz, dist = Math.hypot(dx, dz), d3 = Math.hypot(dx, c.y + HEAD_H - hy, dz) || 1;
+    n.yaw = Math.atan2(-dx, -dz);
+    const los = d3 < 34 && this.world.raycast(hx, hy, hz, dx / d3, (c.y + HEAD_H - hy) / d3, dz / d3, d3) >= d3 - 0.5;
+    if (c.surrender && los && dist < 2.4) { this.room.broadcast({ type: 'npcSay', id: n.id, text: "YOU'RE UNDER ARREST!" }); this.crooks.arrest(c, null); return; }
+    if (!c.surrender && los && dist < 28) {
+      n.state = NPC_STATE.AIM;
+      if (dist > 9) this.walk(n, dx / dist, dz / dist, 2.6 * dt);
+      if (t >= n.nextShot) {
+        n.nextShot = t + 0.9 + Math.random() * 0.7;
+        const hit = Math.random() < Math.max(0.25, 0.6 - d3 * 0.012);
+        const ex = c.x + (hit ? 0 : (Math.random() - 0.5) * 2), ey = c.y + HEAD_H - (hit ? 0.4 : Math.random() * 1.2), ez = c.z + (hit ? 0 : (Math.random() - 0.5) * 2);
+        this.room.broadcast({ type: 'npcShot', id: n.id, o: [r2(hx), r2(hy - 0.35), r2(hz)], e: [r2(ex), r2(ey), r2(ez)] });
+        if (hit) this.damage(c, null, 12, false, 'cop');
+      }
+      n.lastProgress = t; n.progX = n.x; n.progZ = n.z;
+      return;
+    }
+    n.state = NPC_STATE.WALK;
+    // robber inside a store (out of sight, or giving up and waiting to be cuffed): go in through the door like he did
+    const route = c.job === 'rob' && (!los || c.surrender) ? this.crooks.routes.get(c.shop) : null;
+    let gx = c.x, gz = c.z;
+    if (route && Math.hypot(c.x - route.path[route.path.length - 1][0], c.z - route.path[route.path.length - 1][1]) < 6) {
+      const wps = route.path.slice(0, -1);
+      n.wpi = n.wpi || 0;
+      while (n.wpi < wps.length && Math.hypot(n.x - wps[n.wpi][0], n.z - wps[n.wpi][1]) < 0.8) n.wpi++;
+      if (n.wpi < wps.length) { gx = wps[n.wpi][0]; gz = wps[n.wpi][1]; }
+    } else n.wpi = 0;
+    const gdx = gx - n.x, gdz = gz - n.z, gd = Math.hypot(gdx, gdz) || 1;
+    let mx = gdx / gd, mz = gdz / gd;
+    if (t < n.sideUntil) { const sx = -mz * n.side, sz = mx * n.side; mx = mx * 0.3 + sx; mz = mz * 0.3 + sz; const l = Math.hypot(mx, mz); mx /= l; mz /= l; }
+    this.walk(n, mx, mz, (c.surrender ? 3.2 : 4.3) * dt);
+    if (Math.hypot(n.x - n.progX, n.z - n.progZ) > 1.5) { n.lastProgress = t; n.progX = n.x; n.progZ = n.z; }
+    else if (t - n.lastProgress > 1.5 && t > n.sideUntil) { n.side = Math.random() < 0.5 ? -1 : 1; n.sideUntil = t + 1.6; }
+  }
+
   spawnStreetCop(p, swat = false) {
     const [px, , pz] = p.pose.h;
     for (let i = 0; i < 1; i++) {
@@ -260,6 +315,7 @@ export class NPCManager {
   }
 
   updateCop(n, dt, t) {
+    if (n.crook) return this.updateCopVsCrook(n, dt, t);
     const room = this.room;
     let target = room.players.get(n.target);
     if (n.arrest) return this.updateArrest(n, t);
@@ -378,6 +434,7 @@ export class NPCManager {
 
   updateShop(n, dt, t) {
     if (n.rob && t - n.rob.last > 1.5) { n.rob = null; }
+    if (n.rob && n.rob.crook) return;
     if (!n.rob) { n.state = NPC_STATE.IDLE; n.yaw = n.homeYaw; }
   }
 
@@ -389,6 +446,7 @@ export class NPCManager {
         if (t >= n.respawnAt) {
           if (n.type === NPC_TYPE.SHOP) { Object.assign(n, { x: n.home[0], y: n.home[1], z: n.home[2], hp: n.maxHp, state: NPC_STATE.IDLE, rob: null }); }
           else if (n.type === NPC_TYPE.PED && n.runner) { n.remove = true; continue; }
+          else if (n.type === NPC_TYPE.CROOK) { n.remove = true; continue; }
           else if (n.type === NPC_TYPE.PED) { const f = this.newPed(); Object.assign(n, f, { id: n.id, hist: [] }); }
           this.room.broadcast({ type: 'npcSpawn', id: n.id });
         }
@@ -396,11 +454,13 @@ export class NPCManager {
       }
       if (n.type === NPC_TYPE.PED) this.updatePed(n, dt, t);
       else if (n.type === NPC_TYPE.COP) this.updateCop(n, dt, t);
+      else if (n.type === NPC_TYPE.CROOK) this.crooks.update(n, dt, t);
       else this.updateShop(n, dt, t);
       n.hist.push({ t, x: n.x, y: n.y, z: n.z });
       if (n.hist.length > 12) n.hist.shift();
     }
     this.list = this.list.filter(n => !n.remove);
+    this.crooks.tick(dt, t);
     // wanted level decays when no cop can see you
     for (const p of this.room.players.values()) {
       if (!p.wanted) continue;
@@ -421,7 +481,7 @@ export class NPCManager {
     const t = this.room.now();
     for (const n of this.list) {
       const closed = n.type === NPC_TYPE.SHOP && t < n.closedUntil ? 1 : 0;
-      const flags = (n.donut ? 1 : 0) | (n.swat ? 2 : 0) | (n.mode === 'chase' ? 4 : 0) | (n.tower ? 8 : 0) | (n.arrest ? 16 : 0);
+      const flags = (n.donut ? 1 : 0) | (n.swat ? 2 : 0) | (n.mode === 'chase' ? 4 : 0) | (n.tower ? 8 : 0) | (n.arrest ? 16 : 0) | (n.car ? 32 : 0) | (n.loot ? 64 : 0);
       arr.push([n.id, n.type, r2(n.x), r2(n.y), r2(n.z), r2(n.yaw), n.state, closed, flags]);
     }
     return arr;

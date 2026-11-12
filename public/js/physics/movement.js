@@ -152,12 +152,16 @@ const SPHERES = [0.32, 0.9, 1.42];
 const WR = 0.32;
 const STEP = 0.5;
 
+const CLIMB_SPEED = 3.4;   // m/s up a wall (PC wall climbing)
+
 export class Walker {
   constructor(world, ladders) {
     this.world = world; this.ladders = ladders;
     this.feet = new THREE.Vector3(); this.vel = new THREE.Vector3();
     this.grounded = false; this.coyote = 0; this.onLadder = false; this.stepDist = 0;
     this.height = 1.6;
+    this.wallN = null;       // the wall you pushed against last frame (for wall climbing)
+    this.climbing = false;   // scaling a wall right now (PC: walk into a wall + hold Space)
     this.mods = { speed: 1, jump: 1, fly: false };   // mod menu
   }
   overlaps(x, y, z, scale = 0.95) {
@@ -168,6 +172,22 @@ export class Walker {
     const c = this.feet;
     for (const l of this.ladders) {
       if (c.x > l.min[0] && c.x < l.max[0] && c.z > l.min[2] && c.z < l.max[2] && c.y + 0.4 > l.min[1] && c.y < l.max[1]) return true;
+    }
+    return false;
+  }
+  // pull-up: is there a ledge with room to stand just in front of you, up to 1.2 m higher? then go there
+  mantle(wish) {
+    const l = Math.hypot(wish.x, wish.z); if (l < 0.3) return false;
+    const fx = wish.x / l, fz = wish.z / l;
+    for (const reach of [0.55, 0.8]) {
+      const px = this.feet.x + fx * reach, pz = this.feet.z + fz * reach;
+      for (let dy = 0.25; dy <= 1.2; dy += 0.05) {
+        const y = this.feet.y + dy;
+        if (this.overlaps(px, y, pz, 1.02)) continue;               // no room to stand there
+        if (!this.overlaps(px, y - 0.12, pz, 1.0)) break;           // nothing to stand on (not a ledge)
+        this.feet.set(px, y + 0.02, pz); this.resolve();
+        return true;
+      }
     }
     return false;
   }
@@ -189,7 +209,7 @@ export class Walker {
     return { ground, wall, wallN, ceiling };
   }
 
-  // input: { wish: Vector3 (world XZ, length 0..1), sprint, jump (edge), jumpHeld, climb (0..1) }
+  // input: { wish: Vector3 (world XZ, length 0..1), sprint, jump (edge), jumpHeld, climb (0..1), canClimb }
   update(dt, input) {
     const events = { landed: 0, step: false, jumped: false };
     // self-heal if anything ever produced NaN (never let one bad frame break the game)
@@ -215,8 +235,15 @@ export class Walker {
       if (input.jump) { this.vel.y = 5; this.vel.x -= input.wish.x * 4; this.vel.z -= input.wish.z * 4; events.jumped = true; }
     } else {
       const jm = this.mods.jump || 1;   // mod menu: super jump = stronger jump + floatier gravity
-      this.vel.y -= 22 * dt / Math.sqrt(jm);
-      if (input.jump && (this.grounded || this.coyote > 0)) { this.vel.y = 7.4 * Math.sqrt(jm) * (jm > 1 ? 1.25 : 1); this.grounded = false; this.coyote = 0; events.jumped = true; }
+      // wall climbing: keep walking into a wall and hold Space to scale it (at the top you pull yourself onto the roof)
+      const wn = this.wallN, into = wn ? input.wish.x * wn.nx + input.wish.z * wn.nz : 0;
+      this.climbing = !!(input.canClimb !== false && wn && input.jumpHeld && into < -0.35);
+      if (this.climbing) {
+        this.vel.y = CLIMB_SPEED * Math.min(1.6, Math.sqrt(this.mods.speed || 1));
+        this.vel.x = input.wish.x * 2.5; this.vel.z = input.wish.z * 2.5;   // stay pressed against the wall
+        this.grounded = false; this.coyote = 0;
+      } else this.vel.y -= 22 * dt / Math.sqrt(jm);
+      if (!this.climbing && input.jump && (this.grounded || this.coyote > 0)) { this.vel.y = 7.4 * Math.sqrt(jm) * (jm > 1 ? 1.25 : 1); this.grounded = false; this.coyote = 0; events.jumped = true; }
     }
     if (this.vel.y < -30) this.vel.y = -30;
     const wasGrounded = this.grounded;
@@ -224,7 +251,7 @@ export class Walker {
     const total = this.vel.clone().multiplyScalar(dt);
     const n = Math.max(1, Math.ceil(total.length() / 0.18));
     this.grounded = false;
-    let blocked = false;
+    let blocked = false, wallN = null;
     for (let i = 0; i < n; i++) {
       const before = this.feet.clone();
       this.feet.x += total.x / n; this.feet.z += total.z / n;
@@ -241,6 +268,7 @@ export class Walker {
           r = { ground: true, wall: false };
         } else blocked = true;
       } else if (r.wall) blocked = true;
+      if (r.wall && r.wallN) wallN = r.wallN;
       this.feet.y += total.y / n;
       const r2 = this.resolve();
       if (r.ground || r2.ground) { this.grounded = true; if (this.vel.y < 0) this.vel.y = 0; }
@@ -257,6 +285,16 @@ export class Walker {
       const fx = input.wish.x, fz = input.wish.z;
       if (Math.hypot(fx, fz) > 0.3 && !this.overlaps(this.feet.x + fx * 0.5, this.feet.y + 1.0, this.feet.z + fz * 0.5)) this.vel.y = Math.max(this.vel.y, 5.2);
     }
+    // near the top of a climb: pull yourself up over the edge (also gets you past a roof trim that sticks out)
+    if (this.climbing && this.mantle(input.wish)) { this.climbing = false; this.vel.set(0, 0, 0); this.grounded = true; this.wallN = null; events.climbing = false; events.mantled = true; return events; }
+    // remember the wall we're touching for next frame's climb (only walls that face sideways)
+    this.wallN = wallN && Math.abs(wallN.ny) < 0.55 ? wallN : null;
+    if (this.climbing && !this.wallN) {
+      // the wall ended under us: little hop forward onto the ledge / roof
+      this.vel.y = Math.max(this.vel.y, 4.2); this.vel.x = input.wish.x * 3.5; this.vel.z = input.wish.z * 3.5; this.climbing = false;
+    }
+    if (this.climbing) { this.stepDist += Math.abs(total.y); if (this.stepDist > 0.7) { this.stepDist = 0; events.step = true; } }
+    events.climbing = this.climbing;
     if (this.grounded) this.coyote = 0.12; else this.coyote -= dt;
     if (!wasGrounded && this.grounded && prevVy < -4) events.landed = -prevVy;
     if (this.grounded) {

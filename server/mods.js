@@ -21,7 +21,8 @@ export function onMod(room, p, m) {
     room.broadcast({ type: 'playerUpdate', p: room.publicPlayer(p) });
   } else if (k === 'give') {
     const w = String(m.v);
-    if (MOD_GIVE.includes(w) && p.alive && !p.jail) { room.giveWeapon(p, w, true); room.sendInventory(p); }
+    if (w === 'golden') room.gold.modGive(p);   // the one-per-game Golden Sniper (you become its owner)
+    else if (MOD_GIVE.includes(w) && p.alive && !p.jail) { room.giveWeapon(p, w, true); room.sendInventory(p); }
   } else if (k === 'cash') {
     p.cash = (p.cash || 0) + 1000;
     room.broadcast({ type: 'playerUpdate', p: room.publicPlayer(p) });

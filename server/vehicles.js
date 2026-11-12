@@ -133,9 +133,11 @@ export class VehicleManager {
       const ahead = dx * fx + dz * fz, side = Math.abs(dx * -fz + dz * fx);
       return ahead > 0.5 && ahead < range && side < half;
     };
+    // a robber is walking up to this car: the driver is waiting at the light and doesn't see him coming
+    if (car.crookTarget && this.room.now() < (car.crookWaitUntil || 0)) return 'crook';
     for (const o of this.cars) if (o !== car && check(o.x, o.z, 8.5, 2.4)) { car.blocker = o; return 'car'; }
     // traffic lights: stop at the line on red (and on yellow if there's still room to stop)
-    if (!car.police || !car.siren) {
+    if ((!car.police || !car.siren) && !car.crook) {   // car thieves run red lights
       const alongX = Math.abs(fx) > 0.7, alongZ = Math.abs(fz) > 0.7, t = this.room.now();
       if (alongX || alongZ) for (const [ix, iz] of SIGNALS) {
         if (alongX ? Math.abs(car.z - iz) > 6 : Math.abs(car.x - ix) > 6) continue;
@@ -148,8 +150,8 @@ export class VehicleManager {
     for (const p of this.room.players.values()) {
       if (!p.alive || !p.pose || p.inCar || p.ride || p.pose.h[1] > car.y + 3.5) continue;
       if (check(p.pose.h[0], p.pose.h[2], 9, 2.2)) return 'player';
-      // someone walking up to the car (e.g. to the driver's door): the driver freezes
-      if (Math.hypot(p.pose.h[0] - car.x, p.pose.h[2] - car.z) < 4.2) return 'near';
+      // someone walking up to the car (e.g. to the driver's door): the driver freezes (a car thief doesn't)
+      if (!car.crook && Math.hypot(p.pose.h[0] - car.x, p.pose.h[2] - car.z) < 4.2) return 'near';
     }
     for (const n of this.room.npcs.list) if (n.state !== NPC_STATE.DEAD && check(n.x, n.z, 7, 2.0)) return 'npc';
     return null;
@@ -176,6 +178,7 @@ export class VehicleManager {
       this.room.npcs.spawnCopsFor(p, 2);
     }
     if (car.driver === DRIVER.NPC && car.route) { car.route = null; car.siren = false; } // police dispatch car: the cop driver gives up the car
+    else if (car.driver === DRIVER.NPC && car.crook) { this.room.npcs.crooks.bail(car, t); this.room.npcs.noise(car.x, car.z, 18); } // taking a stolen car back from a thief: no crime
     else if (car.driver === DRIVER.NPC) {
       // the driver bails out of the left door and runs for it
       const lx = Math.cos(car.yaw), lz = -Math.sin(car.yaw); // car's left side
@@ -307,15 +310,17 @@ export class VehicleManager {
       const why = t < car.pushUntil ? null : this.blocked(car);
       // waiting in line behind a car that's stopped at a red light is a normal wait, not a jam
       car.queued = why === 'light' || (why === 'car' && !!car.blocker && !!car.blocker.queued);
-      const target = why ? 0 : CRUISE;
+      const target = why ? 0 : car.crook ? CRUISE * 1.6 : CRUISE;   // car thieves floor it
       car.speed += Math.max(-14 * dt, Math.min(5 * dt, target - car.speed));
       if (why) {
         if (!car.waitSince) car.waitSince = t;
         if (why === 'player' && t - car.lastHonk > 3) { car.lastHonk = t; this.room.broadcast({ type: 'honk', id: car.id }); }
         if (why === 'car' && t - car.waitSince > (car.queued ? 25 : 3)) car.pushUntil = t + 2;
+        if (car.crook && t - car.waitSince > 1.2) { car.pushUntil = t + 1.5; if (t - car.lastHonk > 2) { car.lastHonk = t; this.room.broadcast({ type: 'honk', id: car.id }); } }
       } else car.waitSince = 0;
       car.s += car.speed * dt;
       this.placeOnLoop(car);
+      if (car.crook) { const n = this.room.npcs.list.find(q => q.id === car.crook); if (n) this.room.npcs.crooks.seat(n, car); }
     }
   }
   sendHome(car) { this.ejectRiders(car); this.sendHomeRaw(car); }
@@ -323,6 +328,6 @@ export class VehicleManager {
   cleanup() { for (const c of this.cars) if (c.remove) this.ejectRiders(c); this.cars = this.cars.filter(c => !c.remove); }
   loopYaw(car) { const loop = this.loops[car.loop]; const seg = loop.segs.find(g => car.s >= g.start && car.s < g.start + g.len) || loop.segs[0]; return Math.atan2(-(seg.b[0] - seg.a[0]), -(seg.b[1] - seg.a[1])); }
 
-  carArr(c) { return [c.id, r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.speed), c.driver, c.pid || 0, c.color, c.police ? 1 : 0, c.siren ? 1 : 0]; }
+  carArr(c) { return [c.id, r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.speed), c.driver, c.pid || 0, c.color, c.police ? 1 : 0, c.siren ? 1 : 0, c.crook ? 1 : 0]; }
   snapshot() { return this.cars.map(c => this.carArr(c)); }
 }

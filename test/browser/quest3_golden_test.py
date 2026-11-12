@@ -30,6 +30,9 @@ async def main():
         print('VR prompt at the counter:', await P.evaluate('__cc.G.prompt'))
         await P.evaluate("__xr.controllers.right.updateButtonValue('squeeze', 1)"); await P.wait_for_timeout(500)
         await P.evaluate("__xr.controllers.right.updateButtonValue('squeeze', 0)"); await P.wait_for_timeout(900)
+        print('VR store page:', await P.evaluate('__cc.vrui.model && __cc.vrui.model.title'), '| first item:', await P.evaluate('__cc.vrui.model && __cc.vrui.model.items[0].label'))
+        await P.evaluate("__cc.menuAction('shop:buy:golden')"); await P.wait_for_timeout(1200)
+        await P.evaluate("__cc.menuAction('shop:close')"); await P.wait_for_timeout(400)
         print('holding:', await P.evaluate('__cc.weapons.current && __cc.weapons.current.w'))
         # open street, looking down it
         await P.evaluate(f"({PLACE})(-120, 0.15, -88)"); await P.wait_for_timeout(7000)

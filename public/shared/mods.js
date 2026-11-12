@@ -9,7 +9,7 @@ export const MOD_RATES = ['semi', 'auto', 'minigun'];
 export const MOD_DAMAGE = [5, 10, 25, 50, 75, 100, 150, 250, 500, 999];
 export const MOD_SPEEDS = [1, 1.6, 2.2, 3];
 export const MOD_JUMPS = [1, 1.8, 3];
-export const MOD_GIVE = ['pistol', 'revolver', 'smg', 'ar', 'shotgun', 'sniper', 'rocket'];
+export const MOD_GIVE = ['pistol', 'revolver', 'smg', 'ar', 'shotgun', 'sniper', 'rocket', 'golden'];
 export const SCOPE_NAME = { none: 'NO SCOPE', reddot: 'RED DOT', holo: 'HOLO SIGHT', '2x': '2x SCOPE', '4x': '4x SCOPE', '8x': '8x SCOPE', sniper: 'SNIPER 16x' };
 // desktop zoom (field of view in degrees) and VR scope-glass zoom for each scope
 export const SCOPE_FOV = { reddot: 58, holo: 52, '2x': 36, '4x': 18, '8x': 9.5, sniper: 4.8 };

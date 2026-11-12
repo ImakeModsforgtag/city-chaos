@@ -19,6 +19,9 @@ export class HUD {
     const hp = Math.max(0, Math.round(st.hp));
     this.set('htext', String(hp));
     if (this.cache.hw !== hp) { this.cache.hw = hp; $('hfill').style.width = hp + '%'; $('hfill').classList.toggle('low', hp <= 30); }
+    const ap = Math.round(st.armor || 0);
+    this.set('armorbox', ap ? `🛡 <b>${ap}</b>` : '', 'innerHTML');
+    this.set('boostbox', st.boost ? `⚡ BOOST ${st.boost}s` : '', 'innerHTML');
     const w = st.weapon;
     if (w) {
       this.set('wname', WEAPONS[w.w].icon + ' ' + WEAPONS[w.w].name);

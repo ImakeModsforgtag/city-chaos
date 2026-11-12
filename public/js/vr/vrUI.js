@@ -191,10 +191,11 @@ export class VRUI {
     // wrist + gun screens always face the player
     this.wrist.mesh.lookAt(camPos); this.ammo.mesh.lookAt(camPos);
     const hp = Math.round(st.hp);
-    this.wrist.draw(`${hp}|${st.timer}|${st.kills}|${st.deaths}|${st.teamText}|${st.cash}|${st.wanted}`, (x, w, h) => {
+    this.wrist.draw(`${hp}|${st.timer}|${st.kills}|${st.deaths}|${st.teamText}|${st.cash}|${st.wanted}|${st.armor}|${st.boost}`, (x, w, h) => {
       box(x, 0, 0, w, h, 'rgba(29,20,66,0.88)', 30, INK, 8);
       text(x, '❤ ' + hp, 20, 46, 48, hp > 30 ? '#5dff9b' : '#ff5d5d', 'left');
       text(x, st.timer, w - 20, 46, 42, '#ffd23f', 'right');
+      if (st.armor || st.boost) text(x, (st.armor ? '🛡' + Math.round(st.armor) : '') + (st.boost ? ' ⚡' + st.boost : ''), w / 2 - 10, 46, 34, '#7cc4ff');
       x.fillStyle = '#2a1f55'; roundRect(x, 20, 86, w - 40, 30, 12); x.fill();
       x.fillStyle = hp > 30 ? '#2ec27e' : '#ff3b3b'; roundRect(x, 20, 86, (w - 40) * Math.max(0, hp) / 100, 30, 12); x.fill();
       const stars = '★'.repeat(st.wanted || 0);

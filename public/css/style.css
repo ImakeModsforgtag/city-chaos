@@ -208,3 +208,30 @@ body.scoped #crosshair { display: none; }
 #sight.holo i { left: -22px; top: -22px; width: 40px; height: 40px; background: transparent; border: 3px solid #ff3d00; box-shadow: 0 0 10px #ff3d00, inset 0 0 6px #ff3d00; }
 #sight.holo i::after { content: ''; position: absolute; left: 17px; top: 17px; width: 6px; height: 6px; border-radius: 50%; background: #ff3d00; }
 #sight.hidden { display: none; }
+
+/* ---------- armor / boost next to the health bar */
+#armorbox:empty, #boostbox:empty { display: none; }
+#armorbox { color: #7cc4ff; font-weight: 900; font-size: 18px; margin-left: 4px; }
+#boostbox { color: #ffd23f; font-weight: 900; font-size: 15px; background: rgba(255,159,28,0.25); border-radius: 10px; padding: 2px 8px; }
+
+/* ---------- store menu */
+#shopmenu { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(820px, 94vw); max-height: 88vh; overflow: auto; z-index: 60;
+  background: #1d1442ee; border: 4px solid #ffd23f; border-radius: 22px; padding: 14px 16px; color: #fff; font-family: inherit; box-shadow: 0 10px 40px #0008; }
+#shopmenu.hidden { display: none; }
+#shopmenu .sm-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+#shopmenu .sm-head b { font-size: 26px; color: #ffd23f; letter-spacing: 1px; flex: 1; }
+#shopmenu .sm-cash { font-size: 22px; font-weight: 900; color: #7dff9a; background: #0006; padding: 4px 12px; border-radius: 12px; }
+#shopmenu .sm-head button { background: #6c6f8a; color: #fff; border: 0; border-radius: 10px; font-size: 18px; padding: 6px 12px; cursor: pointer; }
+#shopmenu .sm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+#shopmenu .sm-item { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 12px 8px 10px; cursor: pointer;
+  background: #2a1f55; border: 3px solid var(--c); border-radius: 16px; color: #fff; font-family: inherit; transition: transform .08s, background .08s; }
+#shopmenu .sm-item:hover { transform: translateY(-2px); background: #3a2d72; }
+#shopmenu .sm-item i { font-style: normal; font-size: 34px; }
+#shopmenu .sm-item b { font-size: 16px; }
+#shopmenu .sm-item small { font-size: 12px; color: #cfc8ff; min-height: 28px; text-align: center; }
+#shopmenu .sm-item em { font-style: normal; font-weight: 900; font-size: 18px; background: var(--c); border-radius: 10px; padding: 2px 12px; }
+#shopmenu .sm-item kbd { position: absolute; left: 8px; top: 6px; font-size: 12px; color: #fff8; font-family: inherit; }
+#shopmenu .sm-item.poor { opacity: 0.45; }
+#shopmenu .sm-item.gold { background: linear-gradient(135deg, #5c4300, #b8860b); border-color: #ffd23f; }
+#shopmenu .sm-msg { margin-top: 10px; text-align: center; font-size: 16px; color: #cfc8ff; }
+#shopmenu .sm-msg.good { color: #7dff9a; } #shopmenu .sm-msg.bad { color: #ff9b9b; }

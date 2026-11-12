@@ -72,7 +72,17 @@ ok(!A.wanted, 'cops ignore me: you can\'t get wanted stars');
 
 // give / cash / heal / teleport
 mod(A, 'give', 'rocket'); ok(A.slots[A.cur].w === 'rocket', 'give weapon');
-mod(A, 'give', 'golden'); ok(A.slots[A.cur].w !== 'golden', 'the secret Golden Sniper can\'t be spawned');
+// Golden Sniper from the Give list: still one per game, and the giver becomes its owner
+B.slots = [{ w: 'golden', mag: 5, reserve: 15 }, { w: 'smg', mag: 30, reserve: 90 }]; B.cur = 0; room.gold.owner = B.id;
+const bMsgs = B.client.msgs.length;
+mod(A, 'give', 'golden');
+ok(A.slots[A.cur].w === 'golden' && room.gold.owner === A.id, 'Give: Golden Sniper puts it in your hands and makes you the owner');
+ok(!B.slots.some(s => s.w === 'golden') && B.slots[B.cur].w === 'smg', 'the old owner loses it (only one per game)');
+ok(!B.client.msgs.slice(bMsgs).some(m => JSON.stringify(m).includes('olden') && m.type !== 'inv'), 'nobody is told who took it');
+ok(last(A, 'goldInfo') && last(A, 'goldInfo').own === 1, 'you get the owner info (scope, bullet cam work)');
+mod(A, 'give', 'golden'); ok(A.slots.filter(s => s.w === 'golden').length === 1, 'giving it twice doesn\'t duplicate it');
+room.kill(A, B, 'pistol', false); room.spawn(A);
+ok(A.slots.some(s => s.w === 'golden'), 'it comes back when you respawn, like a bought one');
 const c0 = A.cash || 0; mod(A, 'cash'); ok(A.cash === c0 + 1000, '+$1000');
 mod(A, 'god', false); A.hp = 20; mod(A, 'heal'); ok(A.hp === 100, 'heal');
 mod(A, 'tp', 1); const tp = last(A, 'tp');

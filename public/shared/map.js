@@ -388,7 +388,8 @@ export function buildMap() {
     for (let k = 0; k < 4; k++) box(x + 10 + k * 6, Y, z + 8, x + 11.2 + k * 6, 2.0, z + 15, 0xeeeeee); // shelves
     pickup('weapon', 'pistol', x + 32, 1.0, z + 10);
     pickup('weapon', 'smg', x + 20, 4 + 1.0, z + 12);
-    shops.push({ name: 'MEGA MART', keeper: [x + 28, Y, z + 17], yaw: Math.PI });
+    shops.push({ name: 'MEGA MART', keeper: [x + 31, Y, z + 17], yaw: 0 });   // faces into the store, behind the checkout
+    box(x + 29.6, Y, z + 15.3, x + 32.4, 1.0, z + 16.1, PALETTE.wood);         // checkout counter
     pickup('ammo', null, x + 34, m.H + 1.1, z + 15);
     spawns.push({ p: [x + 22, Y, z + 24], team: 0 });
   }
