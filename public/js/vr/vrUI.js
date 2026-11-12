@@ -111,7 +111,6 @@ export class VRUI {
       { label: `SHADOWS: ${s.shadows ? 'ON' : 'OFF'}`, color: '#8338ec', act: 'shadows' },
       ...(m.teams ? [{ label: 'SWITCH TEAM', color: '#ff9f1c', act: 'team' }] : []),
       ...(m.isHost ? [{ label: `MODE: ${m.mode === 'tdm' ? 'TEAM DEATHMATCH' : 'FREE FOR ALL'} (host)`, color: '#ff3d7f', act: 'mode' }] : []),
-      ...(m.mods ? [{ label: '🛠  MOD MENU', color: '#00b4d8', act: 'mods' }] : []),
       { label: '🚪  LEAVE ROOM', color: '#6c6f8a', act: 'leave' }
     ];
     const key = JSON.stringify(items.map(i => i.label)) + this.hover + m.code;
@@ -130,7 +129,7 @@ export class VRUI {
     });
   }
 
-  // a page with its own buttons (the mod menu): two columns, title + subtitle
+  // a page with its own buttons (store menus): two columns, title + subtitle
   drawPage(m) {
     const items = m.items, cols = m.cols || 1, bw = cols === 2 ? 430 : 864, bh = cols === 2 ? 78 : 84, step = cols === 2 ? 86 : 94;
     this.buttons = items.map((it, i) => ({ x: cols === 2 ? (i % 2 ? 534 : 60) : 80, y: 230 + Math.floor(i / cols) * step, w: bw, h: bh, act: it.act }));

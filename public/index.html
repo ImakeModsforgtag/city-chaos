@@ -37,9 +37,26 @@
           <button class="b-pink" data-goto="custom">🎨 CUSTOMIZE</button>
           <button class="b-purple" data-goto="settings">⚙ SETTINGS</button>
         </div>
-        <button class="b-yellow" data-goto="howto">❓ HOW TO PLAY</button>
+        <div class="row">
+          <button class="b-blue" data-goto="profile">📊 MY PROGRESS</button>
+          <button class="b-yellow" data-goto="howto">❓ HOW TO PLAY</button>
+        </div>
       </div>
+      <p id="wallet-line" class="netstatus"></p>
       <p id="net-status" class="netstatus">Connecting...</p>
+    </div>
+
+    <div id="screen-profile" class="screen panel hidden">
+      <h2>📊 MY PROGRESS</h2>
+      <p class="pf-cash">💰 <b id="pf-cash">$0</b> <small>saved cash</small></p>
+      <div id="pf-stats" class="pf-stats"></div>
+      <p class="pf-note">Your cash and stats save automatically on this device and browser while you play.
+        If you clear your browser data your progress starts over.</p>
+      <p id="pf-msg" class="error"></p>
+      <div class="btns">
+        <button class="big b-green" data-goto="main">◀ BACK</button>
+        <button class="b-gray" data-action="resetProgress">🗑 START OVER</button>
+      </div>
     </div>
 
     <div id="screen-join" class="screen panel hidden">
@@ -183,6 +200,7 @@
           <h3>🏆 Rules</h3>
           <ul>
             <li>Everyone has 100 health. Headshots hurt a lot more.</li>
+            <li>Your cash and stats save automatically (see 📊 MY PROGRESS). New players start with $200.</li>
             <li>Eliminated players respawn after 5 seconds.</li>
             <li>Pistols hide in shops, shotguns at the police station, snipers on rooftops, rockets in red crates.</li>
           </ul>
@@ -196,7 +214,6 @@
   <!-- ============================ DESKTOP HUD ============================ -->
   <div id="hud" class="hidden">
     <div id="crosshair"><i></i><i></i><i></i><i></i></div>
-    <div id="sight" class="hidden"><i></i></div>
     <div id="scope" class="hidden"><div class="lens"></div><div class="sinfo"><b id="scopeZoom">8x</b><span id="scopeLock"></span><i>Scroll: zoom · Right click: scope</i></div></div>
     <div id="hitmarker">✕</div>
     <div id="topbar"><span id="timer">10:00</span><span id="teamscore" class="hidden"><b class="red">0</b> : <b class="blue">0</b></span><span id="myscore"></span><span id="cash">$0</span></div>

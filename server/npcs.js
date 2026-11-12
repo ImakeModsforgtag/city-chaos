@@ -81,7 +81,6 @@ export class NPCManager {
 
   // ---------------------------------------------------------------- wanted level
   addWanted(p, stars, reason) {
-    if (p.mods && p.mods.ghost) return;   // mod menu: cops ignore me
     if (!p || !p.alive || p.role === 'cop' || p.jail || p.holding) return; // cops can't become wanted; prisoners are already caught
     const before = p.wanted || 0;
     p.wanted = Math.min(5, before + stars);
@@ -125,7 +124,7 @@ export class NPCManager {
     n.yaw = Math.atan2(-(hx - n.x), -(hz - n.z));
     if (n.rob.progress >= ROB_TIME) {
       const cash = 150 + Math.floor(Math.random() * 350);
-      p.cash = (p.cash || 0) + cash; p.robs = (p.robs || 0) + 1;
+      p.cash = (p.cash || 0) + cash; p.robs = (p.robs || 0) + 1; this.room.saves.stat(p, 'robs');
       n.closedUntil = t + STORE_CLOSED; n.rob = null;
       this.room.broadcast({ type: 'robbed', id: n.id, by: p.id, shop: n.shop, cash, total: p.cash });
       this.addWanted(p, 2, 'robbery');

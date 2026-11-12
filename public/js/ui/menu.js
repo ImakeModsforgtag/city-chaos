@@ -82,10 +82,12 @@ export class Menu {
     if (name === 'custom') this.startPreview(); else this.stopPreview();
     if (name === 'join') { $('join-error').textContent = ''; setTimeout(() => $('code-input').focus(), 50); }
     if (name === 'settings') this.syncSettings();
+    if (name === 'profile' && this.cb.onProgress) this.cb.onProgress();
   }
   action(a) {
     const cb = this.cb;
     if (a === 'play') cb.onPlay();
+    if (a === 'resetProgress' && cb.onResetProgress) cb.onResetProgress();
     if (a === 'join') {
       const code = $('code-input').value.trim().toUpperCase();
       if (code.length !== 6) { $('join-error').textContent = 'Room codes have 6 characters.'; return; }

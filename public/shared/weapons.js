@@ -40,12 +40,6 @@ export const WEAPONS = {
     headMult: 3, kick: 0.22, color: 0xffcf3a, icon: '🏆', rarity: 'mythic', shopOnly: true,
     bulletSpeed: 90, scopeFov: [9, 3.5]
   },
-  // Mod menu "Custom Gun": real stats come from the player's custom settings (shared/mods.js effectiveDef)
-  custom: {
-    name: 'Custom Gun', damage: 100, fireInterval: 0.11, auto: true, mag: 30, reserve: 300,
-    reloadTime: 1.0, spread: 0.01, pellets: 1, range: 320, falloffStart: 320, falloffEnd: 321,
-    headMult: 2, kick: 0.05, color: 0x7cf9ff, icon: '🛠', rarity: 'mythic', modOnly: true
-  },
   rocket: {
     name: 'Rocket Launcher', damage: 110, fireInterval: 1.2, auto: false, mag: 1, reserve: 3,
     reloadTime: 2.5, spread: 0, pellets: 0, range: 300, projectileSpeed: 32,

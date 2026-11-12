@@ -1,9 +1,9 @@
 # PC wall climbing: walk into a building wall and hold Space -> scale it and pull up onto the roof.
-# Also: no climbing in prison, and the mod menu can give the Golden Sniper.
+# Also: the old mod menu code does nothing now.
 import asyncio, os
 from playwright.async_api import async_playwright
 ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
-LOW = "try { const s = JSON.parse(localStorage.getItem('cc_settings') || '{}'); s.quality = 'low'; s.shadows = false; localStorage.setItem('cc_settings', JSON.stringify(s)); localStorage.removeItem('cc_mods'); } catch (e) {}"
+LOW = "try { const s = JSON.parse(localStorage.getItem('cc_settings') || '{}'); s.quality = 'low'; s.shadows = false; localStorage.setItem('cc_settings', JSON.stringify(s)); } catch (e) {}"
 os.makedirs('/tmp/shots', exist_ok=True)
 
 # a plain solid building wall facing an open street: stand 0.5 m from its middle, facing it
@@ -55,19 +55,9 @@ async def main():
         up = await P.evaluate('__cc.walker.feet.y')
         await P.keyboard.up('Space'); await P.wait_for_timeout(4000); await P.keyboard.up('KeyW')
         print('let go of Space at', round(up, 2), '-> fell back to', round(await P.evaluate('__cc.walker.feet.y'), 2))
-        # mod menu: give the Golden Sniper
+        # the mod menu is gone: typing the old code does nothing
         await P.keyboard.type('MODMENU', delay=120); await P.wait_for_timeout(900)
-        print('mod panel open:', await P.evaluate("!document.getElementById('modmenu').classList.contains('hidden')"))
-        has = await P.evaluate("!!document.querySelector('#modmenu [data-a=\"give:golden\"]')")
-        print('mod menu has a Golden Sniper give button:', has, await P.evaluate("document.querySelector('#modmenu [data-a=\"give:golden\"]')?.textContent"))
-        await P.evaluate("document.querySelector('#modmenu [data-a=\"give:golden\"]').click()"); await P.wait_for_timeout(1200)
-        print('holding:', await P.evaluate('__cc.weapons.current.w'), '| owner info:', await P.evaluate('JSON.stringify(__cc.G.gold)'))
-        await P.screenshot(path='/tmp/shots/c3_mod_golden.png')
-        await P.keyboard.press('F8'); await P.wait_for_timeout(500)
-        await P.evaluate("__cc.desk.mouse.right = true"); await P.wait_for_timeout(1500)
-        print('golden scope works: scoped', await P.evaluate('__cc.G.scoped'), 'fov', await P.evaluate('__cc.camera.fov'))
-        await P.screenshot(path='/tmp/shots/c4_mod_golden_scope.png')
-        await P.evaluate("__cc.desk.mouse.right = false")
+        print('old MODMENU code does nothing:', await P.evaluate("!document.getElementById('modmenu')"), '| view', await P.evaluate('__cc.G.view'))
         print('errors:', errs)
         await b.close()
 asyncio.run(main())

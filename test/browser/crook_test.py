@@ -3,7 +3,7 @@
 import asyncio, os
 from playwright.async_api import async_playwright
 ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
-LOW = "try { const s = JSON.parse(localStorage.getItem('cc_settings') || '{}'); s.quality = 'low'; s.shadows = false; localStorage.setItem('cc_settings', JSON.stringify(s)); localStorage.removeItem('cc_mods'); } catch (e) {}"
+LOW = "try { const s = JSON.parse(localStorage.getItem('cc_settings') || '{}'); s.quality = 'low'; s.shadows = false; localStorage.setItem('cc_settings', JSON.stringify(s)); } catch (e) {}"
 os.makedirs('/tmp/shots', exist_ok=True)
 CROOK = "(() => { const c = [...__cc.npcs.map.values()].filter(n => n.type === 6); return c.map(n => ({ id: n.id, x: +n.x.toFixed(1), z: +n.z.toFixed(1), st: n.state, vis: n.root.visible, bag: n.bag && n.bag.visible, car: !!(n.flags & 32) })); })()"
 

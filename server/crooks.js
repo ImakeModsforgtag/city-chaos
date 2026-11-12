@@ -316,6 +316,7 @@ export class Crooks {
     if (!attacker) { this.room.broadcast({ type: 'crook', ev: 'down', id: n.id }); return; }
     const pay = (attacker.role === 'cop' ? CROOK.bounty * 2 : CROOK.bounty) + (n.loot || 0);
     attacker.cash = (attacker.cash || 0) + pay;
+    this.room.saves.stat(attacker, 'crooks');
     this.room.sendTo(attacker, { type: 'crook', ev: 'bounty', id: n.id, cash: pay, loot: n.loot || 0, total: attacker.cash });
     this.room.broadcast({ type: 'playerUpdate', p: this.room.publicPlayer(attacker) });
   }
@@ -335,6 +336,7 @@ export class Crooks {
     if (p) {
       const pay = CROOK.arrestPay + (n.loot || 0);
       p.cash = (p.cash || 0) + pay;
+      this.room.saves.stat(p, 'crooks');
       this.room.sendTo(p, { type: 'crook', ev: 'bounty', id: n.id, cash: pay, loot: n.loot || 0, total: p.cash, arrest: 1 });
       this.room.broadcast({ type: 'playerUpdate', p: this.room.publicPlayer(p) });
     }

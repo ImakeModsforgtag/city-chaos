@@ -4,7 +4,7 @@
 import asyncio, os, math
 from playwright.async_api import async_playwright
 ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
-LOW = "try { const s = JSON.parse(localStorage.getItem('cc_settings') || '{}'); s.quality = 'low'; s.shadows = false; localStorage.setItem('cc_settings', JSON.stringify(s)); localStorage.removeItem('cc_mods'); } catch (e) {}"
+LOW = "try { const s = JSON.parse(localStorage.getItem('cc_settings') || '{}'); s.quality = 'low'; s.shadows = false; localStorage.setItem('cc_settings', JSON.stringify(s)); } catch (e) {}"
 os.makedirs('/tmp/shots', exist_ok=True)
 async def goto(P, name, wait=True):
     tgt = await P.evaluate(f"({GO})('{name}')")
@@ -81,7 +81,7 @@ async def vr(b):
     print('VR: grip opens the store page:', await P.evaluate('__cc.vrui.menuOpen'), await P.evaluate('__cc.vrui.model && __cc.vrui.model.title'))
     await P.screenshot(path='/tmp/shots/s5_vr_diner.png')
     await P.evaluate("__cc.G.me.hp = 40"); await P.evaluate("__cc.menuAction('shop:buy:shake')"); await P.wait_for_timeout(900)
-    print('VR: rocket shake -> boost', await P.evaluate('__cc.mods.boostLeft().toFixed(0)'), 's, gorilla cap x', await P.evaluate('__cc.vrMover.gorilla.capScale'), '| sub:', await P.evaluate('__cc.vrui.model && __cc.vrui.model.sub'), '| menuOpen', await P.evaluate('__cc.vrui.menuOpen'))
+    print('VR: rocket shake -> boost', await P.evaluate('__cc.boosts.boostLeft().toFixed(0)'), 's, gorilla cap x', await P.evaluate('__cc.vrMover.gorilla.capScale'), '| sub:', await P.evaluate('__cc.vrui.model && __cc.vrui.model.sub'), '| menuOpen', await P.evaluate('__cc.vrui.menuOpen'))
     await P.screenshot(path='/tmp/shots/s6_vr_bought.png')
     await P.evaluate("__cc.menuAction('shop:close')"); await P.wait_for_timeout(400)
     print('VR: closed:', not await P.evaluate('__cc.vrui.menuOpen'), await P.evaluate('__cc.shopMenu.shop'))

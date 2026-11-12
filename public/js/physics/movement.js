@@ -162,7 +162,7 @@ export class Walker {
     this.height = 1.6;
     this.wallN = null;       // the wall you pushed against last frame (for wall climbing)
     this.climbing = false;   // scaling a wall right now (PC: walk into a wall + hold Space)
-    this.mods = { speed: 1, jump: 1, fly: false };   // mod menu
+    this.mods = { speed: 1, jump: 1 };   // speed / jump multipliers (store boosts)
   }
   overlaps(x, y, z, scale = 0.95) {
     for (const h of SPHERES) if (h < this.height && this.world.sphereOverlaps(x, y + h, z, WR * scale)) return true;
@@ -216,13 +216,6 @@ export class Walker {
     if (!Number.isFinite(this.vel.x + this.vel.y + this.vel.z)) this.vel.set(0, 0, 0);
     if (!Number.isFinite(this.feet.x + this.feet.y + this.feet.z)) this.feet.set(0, 1, 0);
     if (!Number.isFinite(input.wish.x + input.wish.z)) input.wish.set(0, 0, 0);
-    // mod menu: fly / noclip (free flight through walls, Space up, C down, Shift fast)
-    if (this.mods.fly && input.fly) {
-      const sp = input.sprint ? 30 : 14;
-      this.vel.set(input.fly.x * sp, input.fly.y * sp, input.fly.z * sp);
-      this.feet.addScaledVector(this.vel, dt); this.grounded = false; this.onLadder = false;
-      return events;
-    }
     this.onLadder = this.inLadder();
     const speed = (input.sprint ? 8.2 : 5.6) * (this.mods.speed || 1);
     const tx = input.wish.x * speed, tz = input.wish.z * speed;
@@ -234,7 +227,7 @@ export class Walker {
       this.vel.y = climb > 0.1 ? 3.6 : climb < -0.1 ? -3 : Math.max(this.vel.y - 30 * dt, -1);
       if (input.jump) { this.vel.y = 5; this.vel.x -= input.wish.x * 4; this.vel.z -= input.wish.z * 4; events.jumped = true; }
     } else {
-      const jm = this.mods.jump || 1;   // mod menu: super jump = stronger jump + floatier gravity
+      const jm = this.mods.jump || 1;   // jump boost = stronger jump + floatier gravity
       // wall climbing: keep walking into a wall and hold Space to scale it (at the top you pull yourself onto the roof)
       const wn = this.wallN, into = wn ? input.wish.x * wn.nx + input.wish.z * wn.nz : 0;
       this.climbing = !!(input.canClimb !== false && wn && input.jumpHeld && into < -0.35);

@@ -186,6 +186,7 @@ export class VehicleManager {
       if (p.role !== 'cop') this.room.npcs.addWanted(p, 1, 'carjacking'); // cops can commandeer cars
       this.room.npcs.noise(car.x, car.z, 18);
     }
+    if (car.driver === DRIVER.NPC) this.room.saves.stat(p, 'cars');
     car.driver = DRIVER.PLAYER; car.pid = p.id; car.speed = 0; car.emptySince = 0;
     p.inCar = car.id;
     car.hits = new Map();

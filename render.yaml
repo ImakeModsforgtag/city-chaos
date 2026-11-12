@@ -10,3 +10,5 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
+      - key: PROFILE_SECRET   # signs saved progress so nobody can edit their cash (never change it once players have saves)
+        generateValue: true

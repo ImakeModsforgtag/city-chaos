@@ -120,6 +120,7 @@ wss.on('connection', (ws, req) => {
       if (msg.name) client.info.name = msg.name;
       if (msg.cos) client.info.cos = msg.cos;
       if (msg.role) client.info.role = msg.role === 'cop' ? 'cop' : 'civilian';
+      client.info.profile = typeof msg.profile === 'string' ? msg.profile : null;   // signed save token (saved cash + stats)
       const p = room.addPlayer(client, client.info);
       state.tokens.set(client.token, { code: room.code, id: p.id });
       console.log(`[room] ${room.code} +player ${p.id} (${p.name}) now ${room.connectedCount}`);

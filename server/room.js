@@ -7,9 +7,8 @@ import { NPCManager, rayNpc } from './npcs.js';
 import { VehicleManager } from './vehicles.js';
 import { PrisonManager } from './prison.js';
 import { GoldenSniper } from './golden.js';
-import { onMod } from './mods.js';
 import { onShopBuy, soakArmor } from './shops.js';
-import { effectiveDef } from '../public/shared/mods.js';
+import { Saves } from './profiles.js';
 import { inPrisonArea } from '../public/shared/prison.js';
 import { WEAPONS, WEAPON_IDS, MAX_SLOTS, DEFAULT_WEAPON, falloff, publicWeapon } from '../public/shared/weapons.js';
 import {
@@ -63,6 +62,7 @@ export class Room {
     this.vehicles = new VehicleManager(this, MAP, this.world);
     this.prison = new PrisonManager(this, MAP, this.world);
     this.gold = new GoldenSniper(this, MAP);
+    this.saves = new Saves(this);   // saved progress (cash + lifetime stats)
     this.npcAcc = 0; this.snapCount = 0;
   }
   now() { return now(); }
@@ -84,10 +84,12 @@ export class Room {
       pose: null, hist: [], vr: false, lastStateAt: 0, joinedAt: now()
     };
     this.players.set(id, p);
+    this.saves.attach(p, info.profile);   // your saved cash + stats
     if (!this.hostId) this.hostId = id;
     client.room = this;
     this.spawn(p);
     this.sendTo(p, { type: 'joined', ...this.fullState(p) });
+    this.saves.hello(p);
     this.broadcast({ type: 'playerJoined', p: this.publicPlayer(p) }, id);
     return p;
   }
@@ -109,6 +111,7 @@ export class Room {
   removePlayer(id) {
     const p = this.players.get(id);
     if (!p) return;
+    this.saves.save(p, true);   // last save before leaving (if still connected)
     this.vehicles.playerGone(p);
     this.prison.playerGone(p);
     this.players.delete(id);
@@ -130,7 +133,7 @@ export class Room {
   publicPlayer(p) {
     return { id: p.id, name: p.name, cos: p.cos, team: p.team, hp: p.hp, alive: p.alive, kills: p.kills,
              deaths: p.deaths, connected: p.connected, vr: p.vr, host: p.id === this.hostId, cash: p.cash || 0, wanted: p.wanted || 0, role: p.role || 'civilian',
-             jail: p.jail ? (p.jail.state === 'cut' ? 1 : p.jail.disguise ? 3 : 2) : 0, cg: p.mods && p.mods.custom ? p.mods.custom : null };
+             jail: p.jail ? (p.jail.state === 'cut' ? 1 : p.jail.disguise ? 3 : 2) : 0 };
   }
 
   fullState(p) {
@@ -181,7 +184,6 @@ export class Room {
       case 'skipCut': return this.prison.skipCut(p);
       case 'buyGold': return this.gold.onBuy(p);
       case 'shopBuy': return onShopBuy(this, p, msg);
-      case 'mod': return onMod(this, p, msg);
       case 'testGold': // automated browser tests only (server started with CC_TEST=1)
         if (process.env.CC_TEST === '1') { p.arrests = 5; p.cash = (p.cash || 0) + 1000; this.sendTo(p, this.gold.info(p, { first: 1 })); }
         return;
@@ -351,7 +353,7 @@ export class Room {
     if (p.arrestBy) this.npcs.resistArrest(p, 'shooting');
     const s = p.slots[p.cur];
     if (!p.alive || !s || s.w !== m.w || !p.pose) return this.sendInventory(p);
-    const def = effectiveDef(s.w, p.mods);   // mod menu: custom gun stats / auto fire
+    const def = WEAPONS[s.w];
     if (p.reloadingUntil > t) return this.sendInventory(p);
     if (s.mag <= 0) return this.sendInventory(p);
     if (t - p.lastShot < def.fireInterval * 0.8) return;            // fire-rate cap
@@ -362,7 +364,6 @@ export class Room {
     if (Math.hypot(o[0] - hx, o[1] - hy, o[2] - hz) > 2.6) return;   // muzzle must be near the shooter
     p.lastShot = t;
     s.mag--;
-    if (p.mods && p.mods.inf) s.mag = def.mag;   // mod menu: infinite ammo
     p.protectUntil = 0;
 
     // normalize + validate directions
@@ -436,8 +437,6 @@ export class Room {
       }
     }
     this.broadcast({ type: 'shot', id: p.id, w: s.w, o: o.map(r3), e: ends }, p.id);
-    // mod menu: explosive bullets (and the rocket-based custom gun)
-    if (def.explosive || (p.mods && p.mods.boom)) for (const e of ends.slice(0, 2)) this.explode({ id: this.nextRocketId++, owner: p.id }, e[0], e[1], e[2], null);
     for (const [q, info] of dmgMap) this.damage(q, p, Math.round(info.dmg), s.w, info.head, o);
     for (const [n, info] of npcDmg) this.npcs.damage(n, p, Math.round(info.dmg), info.head, s.w);
     this.sendInventory(p);
@@ -445,7 +444,6 @@ export class Room {
 
   damage(q, attacker, amount, w, head, from) {
     if (!q.alive || amount <= 0) return;
-    if (q.mods && q.mods.god) return;                // mod menu: god mode
     if (q.protectUntil > now()) return;
     if ((q.jail && q.jail.state === 'cut') || q.holding) return;
     // attacking innocent people in public makes you wanted (Free For All only; team matches are a war)
@@ -465,7 +463,7 @@ export class Room {
     victim.boost = null;
     victim.respawnAt = now() + (silent ? 0.5 : RESPAWN_TIME);
     victim.reloadingUntil = 0;
-    if (!silent) victim.deaths++;
+    if (!silent) { victim.deaths++; this.saves.stat(victim, 'deaths'); }
     if (!silent && killer && killer !== victim && victim.wanted) {
       const mult = w === 'arrest' ? 2 : 1; // arresting pays double
       killer.cash = (killer.cash || 0) + victim.wanted * 100 * mult; // bounty for taking down a wanted player
@@ -476,8 +474,8 @@ export class Room {
     if (this.crimes && !silent && killer && killer !== victim && killer.role !== 'cop' && !killer.jail && !MODES[this.mode].teams && !victim.wanted && victim.role !== 'cop' && killer.pose && this.npcs.witnessed(killer.pose.h[0], killer.pose.h[2])) this.npcs.addWanted(killer, 1, 'murder');
     if (victim.wanted) this.npcs.clearWanted(victim);
     if (!silent && killer && killer !== victim) {
-      killer.kills++;
-      if (head) killer.headshots++;
+      killer.kills++; this.saves.stat(killer, 'kills');
+      if (head) { killer.headshots++; this.saves.stat(killer, 'headshots'); }
       if (MODES[this.mode].teams && killer.team >= 0) this.teamScores[killer.team]++;
     }
     const km = { type: 'kill', killer: killer ? killer.id : null, victim: victim.id, w: w || null, head: !!head,
@@ -527,7 +525,7 @@ export class Room {
         if (wd < dist - 0.4) continue;
         dmg = def.splashDamage * (1 - dist / def.splashRadius * 0.7);
       }
-      if (q === owner) dmg *= (owner.mods && owner.mods.boom) ? 0 : def.selfDamageMult;
+      if (q === owner) dmg *= def.selfDamageMult;
       if (dmg > 0) this.damage(q, owner || null, Math.round(dmg), 'rocket', false, [x, y, z]);
     }
   }
@@ -600,12 +598,18 @@ export class Room {
       }
     }
     this.match.state = 'ended'; this.match.winner = winner; this.match.resetAt = now() + 12;
+    for (const q of this.players.values()) {
+      if (!q.connected) continue;
+      this.saves.stat(q, 'matches');
+      if ((winner.id && winner.id === q.id) || (winner.team !== undefined && winner.team === q.team)) this.saves.stat(q, 'wins');
+      this.saves.save(q, true);
+    }
     this.broadcast({ type: 'match', ...this.matchInfo(), scores: this.scores() });
   }
 
   resetMatch() {
     this.teamScores = [0, 0];
-    for (const q of this.players.values()) { q.kills = 0; q.deaths = 0; q.headshots = 0; q.cash = 0; q.wanted = 0; q.robs = 0; }
+    for (const q of this.players.values()) { q.kills = 0; q.deaths = 0; q.headshots = 0; q.wanted = 0; q.robs = 0; }   // cash is your saved wallet: it carries over
     this.npcs.reset();
     this.prison.reset();
     for (const q of this.players.values()) { q.inCar = 0; q.ride = null; q.jail = null; q.holding = null; q.savedInv = null; }
@@ -622,6 +626,7 @@ export class Room {
     const t = now();
     this.finishReloads(t);
     this.gold.tick();
+    this.saves.tick(dt);
     this.npcAcc += dt;
     if (this.npcAcc >= 0.1) { const d = Math.min(0.25, this.npcAcc); this.npcs.tick(d); this.vehicles.tick(d); this.prison.tick(d); this.npcAcc = 0; }
     // rockets

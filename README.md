@@ -241,6 +241,21 @@ Crimes against players and "destruction" only count when somebody sees it (a ped
 
 ---
 
+## 8-ter. Saved progress
+
+Your **cash** and **lifetime stats** now save automatically and carry over between games, rooms and server restarts.
+- New players start with **$200**. Cash is now a wallet: a new match resets takedowns and deaths, but not your cash.
+- **📊 MY PROGRESS** on the main menu shows your saved cash and stats: takedowns, knockouts, headshots, players arrested,
+  stores robbed, robbers stopped, cash earned and spent, time played, matches played and won, and cars hijacked.
+  **START OVER** (tap twice) erases it.
+- Saves happen every few seconds while something changes, at the end of each match and when you leave a room.
+- **How it's stored:** the server keeps the real numbers and sends your browser a *signed* save. When you join, the server
+  checks the signature, so editing the save in the browser gives you a fresh start, not free cash. No database is needed,
+  and saves survive the free Render server going to sleep or redeploying.
+- Progress lives in that device's browser (your Quest browser and your PC each have their own). Clearing browser data erases it.
+- **Set `PROFILE_SECRET` on your server** (Render > your service > Environment > add `PROFILE_SECRET` with any long random
+  text). Do it once and never change it: changing it makes every existing save unreadable.
+
 ## 8-bis. NPC bad guys: robbers and car thieves
 
 Every 35 to 70 seconds a masked robber (black hoodie, black beanie, red bandana, a gun) shows up somewhere in the city.
@@ -281,7 +296,7 @@ You pay with the cash you earn from robberies and bounties (shown at the top of 
 
 - **Guns:** the new gun goes in your hands (if you already have it you get more ammo). You still carry 3 guns max.
 - **Armor** (🛡 next to your health bar, and on your wrist in VR) takes 70% of every hit until it runs out. You lose it when you're eliminated.
-- **Boosts** (⚡ on screen) stack with the mod menu speed and jump and also work with Gorilla arm movement in VR. They end when you die.
+- **Boosts** (⚡ on screen) also work with Gorilla arm movement in VR. They end when you die.
 - **Lottery** prizes are paid straight into your cash; on average the house wins.
 - The store won't take your money for nothing: no food at full health, no ammo when you're full, no smaller armor than you have.
 - You can't shop while a store is closed after a robbery, while the clerk is being robbed (hands up), when the clerk is down, from inside a car, or in prison. The server checks your distance to the counter, that there's no wall in between, and your cash.
@@ -348,29 +363,6 @@ so gorilla movement can climb them. Small street furniture sits right at the cur
 Performance: the city is split into one batch of meshes per block, so the parts behind you aren't drawn and small details
 switch off past about 95 m. Street level is about 50 draw calls and 90k to 150k triangles (less than before the update).
 
-## 8d. Secret mod menu
-
-**Unlock it:** on PC type **M O D M E N U** while playing. On Meta Quest press **A, B, A, X, Y** (within 4 seconds).
-After that it stays unlocked on that device: **F8** (or typing MODMENU) opens and closes it on PC, and on Quest it's a
-**MOD MENU** button in the Y menu (A B A X Y also still works).
-
-| Mod | What it does |
-|---|---|
-| Infinite ammo | Your magazine never runs out (the server keeps it full) |
-| Auto fire (any gun) | Every gun fires full auto, at least 8 shots a second |
-| God mode | You take no damage |
-| Explosive bullets | Every hit explodes like a rocket (your own blasts never hurt you) |
-| Cops ignore me | You can't get wanted stars, so no police |
-| ESP: see everyone | Outlines of players (red), cops (blue) and NPCs (yellow) through walls |
-| Fly / noclip | PC: W/A/S/D + Space up, C down, Shift fast. Quest: left stick flies where you look, left trigger = fast |
-| Speed / Super jump | 1x to 3x speed, up to 3x jump with floaty gravity |
-| Give gun | Any gun, including the **🏆 Golden Sniper**. There's still only one per game: you become its owner (it comes back when you respawn), and if someone else had it, it quietly disappears from their guns |
-| Heal, +$1000, Clear stars, Teleport | Instant. Teleport spots: Chaos Tower ledge, water tower, helipad, Mega Mart roof and more |
-| **Custom Gun** | Pick the base gun (pistol, SMG, AR, shotgun, sniper, rocket), the scope (red dot, holo, 2x, 4x, 8x, sniper 16x), the look (gold, neon, chrome, rainbow, galaxy, lava, ice), the fire mode (semi, auto, minigun) and the damage (1 to 999). Rocket base = explosive hits. Right click (PC) aims through the scope; on Quest raise the gun to your eye and the scope glass zooms |
-
-Everyone else sees your custom gun's look. Mods only work for players who entered the code. To turn the mod menu off
-on your server, set the environment variable **MODS=off** (on Render: your service > Environment > add MODS = off).
-
 ## 9. Settings
 - **VR body:** Gorilla (default: true Gorilla Tag physics, no feet, your hands hold you up, eyes about 0.6 to 1m off the ground) / Small (standing, eyes about 1.25m, auto-calibrated to your height; use RECALIBRATE in the VR menu while standing tall) / Human (real height)
 - **VR movement:** Gorilla arms (default) / Arms + stick / Joystick
@@ -390,6 +382,7 @@ city-chaos/
 │   ├── room.js             authoritative game: hits, damage, ammo, pickups, kills, respawns, modes
 │   ├── npcs.js             pedestrians, shopkeepers, cops, SWAT, robbery, wanted stars, NPC arrests
 │   ├── crooks.js           NPC robbers + car thieves: store holdups, stealing cars, fleeing, fighting back, bounties
+│   ├── profiles.js         saved progress: signed save tokens, stats, autosave
 │   ├── shops.js            buying at the stores: counter + cash checks, guns, ammo, food, armor, boosts, lottery
 │   ├── vehicles.js         NPC traffic, police cars, dispatch, the prison van
 │   └── prison.js           arrests, cutscene timer, prison schedule, guards, cameras, alarms, escapes, basketball
@@ -413,7 +406,7 @@ city-chaos/
 │   ├── js/weapons/         weapon models, firing/reload system, pickups
 │   ├── js/net/             networking (network.js) + voice chat (voice.js)
 │   ├── js/player/          avatars, other players (interpolation), NPC visuals
-│   ├── js/ui/              menus, HUD, settings, desktop input, store menus (shopMenu.js), mod menu
+│   ├── js/ui/              menus, HUD, settings, desktop input, store menus (shopMenu.js)
 │   ├── js/prison/          prison visuals, arrest cutscene, prison interactions
 │   ├── js/audio/           synthesized sound effects + music
 │   └── vendor/three/       Three.js (bundled, no internet CDN needed)
@@ -427,8 +420,9 @@ city-chaos/
 ## 11. What was tested, and what still needs your real headset
 
 **Tested and passing:**
+- **Saved progress (`test/server-test-12.mjs`, `test/browser/save_test.py`):** new players get $200, cash and stats (takedowns, headshots, deaths, earned, spent, play time, matches, wins) are saved, a new match keeps your cash, a new room / server restart loads them back, edited or junk saves are rejected, old mod menu messages are ignored, leaving saves right away, and in the browser: the save survives leaving and coming back, MY PROGRESS shows it, START OVER erases it.
 - **NPC robbers and car thieves (`test/server-test-11.mjs`, `test/browser/crook_test.py`):** a robber walks in through the door and robs every one of the 7 stores, the clerk puts their hands up, the store closes, he escapes with the cash; bounty + stolen cash for shooting one with no wanted stars; robbers shooting back; NPC police responding after a delay and getting him; cop players arresting (E) and civilians not; surrendering; car thieves stealing a car at a light, the driver running off, speeding, taking the car back with no stars, shooting the driver stopping the car, the joyride ending; robbers showing up by themselves (max 2) and the CROOKS=off switch. In the browser: the masked robber, the holdup, the cash bag, the car thief in the driver's seat and the cop arrest prompt.
-- **PC wall climbing and mod menu Golden Sniper (`test/browser/wall_climb_test.py`, `test/server-test-9.mjs`):** walking into a wall without Space stays on the ground, holding Space climbs a 9 m building and pulls up onto the roof, letting go drops you, and the mod menu's Give button hands you a working Golden Sniper (scope, ownership, respawn, taken from the old owner).
+- **PC wall climbing (`test/browser/wall_climb_test.py`):** walking into a wall without Space stays on the ground, holding Space climbs a 9 m building and pulls up onto the roof, letting go drops you, and the old mod menu code does nothing.
 - **Stores (`test/server-test-10.mjs`, plus a PC and emulated Quest 3 browser test):** buying at all 7 stores, prices taken and shown to everyone, guns into your hands, ammo boxes, armor soaking 70% of a hit, food healing, speed and jump boosts, lottery payouts, too far / through a wall / wrong store refused, closed after a robbery, scared clerk, dead or jailed players, double clicks, a short Gorilla body buying over the counter, the PC store panel (click and number keys), the VR store page (grip to open, trigger to buy), and the Golden Sniper bought from the GUN SHOP menu on PC and Quest.
 - **Getaway rides (`test/server-test-7.mjs`):** hopping in, seats, 3 passengers max, cops vs civilians, passengers not hit by their own car, driver getting out and back in, passengers getting out, knocked-out passengers leaving, and escaping prison together in the van. Also tested live: a desktop driver with a VR passenger who stays locked to the seat while the car moves, shoots from the car, and is seen in the seat by the driver.
 - **Prison (77 more checks, `test/server-test-6.mjs`):** wanted levels up to 5, NPC cops cuffing you at 3 stars and resisting arrest, SWAT at 4-5, no shooting at 1 star, police SUVs, prison vs holding cell, the cutscene freezing you and taking weapons, skipping it, waking in your own cell, separate cells for friends, schedule + lockdown doors, guards chasing and catching, noises, camera alarms, looped cameras, the electric fence, escape progress shared between players, and every step of all five escape routes (including a real basketball throw scoring), then being caught again.

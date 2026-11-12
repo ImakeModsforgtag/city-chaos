@@ -52,27 +52,6 @@ export class GoldenSniper {
     this.notifyUnlocked();
   }
 
-  // mod menu "Give gun: Golden Sniper": still only one per game, so the mod user becomes the owner.
-  // If somebody else had it, it quietly leaves their inventory (no message, no kill feed, nobody is told).
-  modGive(p) {
-    if (!p.alive || p.jail) return;
-    const prev = this.owner !== null && this.owner !== p.id ? this.room.players.get(this.owner) : null;
-    if (prev) {
-      const i = prev.slots.findIndex(s => s.w === 'golden');
-      if (i >= 0) {
-        prev.slots.splice(i, 1);
-        if (!prev.slots.length) prev.slots.push({ w: 'pistol', mag: 12, reserve: 48 });
-        prev.cur = Math.min(prev.cur, prev.slots.length - 1);
-        this.room.sendInventory(prev);
-      }
-    }
-    this.owner = p.id;
-    this.room.giveWeapon(p, 'golden', true);
-    this.room.sendInventory(p);
-    this.room.sendTo(p, this.info(p));
-    this.notifyUnlocked();
-  }
-
   // the owner keeps it for the whole game: it comes back every time they respawn
   respawned(p) { if (this.owner === p.id && !p.jail) this.room.giveWeapon(p, 'golden', false); }
   playerGone(id) {

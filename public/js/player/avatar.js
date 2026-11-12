@@ -138,11 +138,11 @@ export class Avatar {
   }
 
   setWeapon(id, look) {
-    const key = id === 'custom' && look ? id + JSON.stringify(look) : id;
+    const key = id;
     if (key === this.weaponId) return;
     this.weaponId = key;
     if (this.weapon) this.weaponHolder.remove(this.weapon);
-    this.weapon = id ? createWeaponModel(id, look) : null;
+    this.weapon = id ? createWeaponModel(id) : null;
     if (this.weapon) {
       // The right-hand pose is the controller's pointing pose, so the gun needs no extra tilt.
       this.weapon.position.set(0, -0.02, 0.03);
