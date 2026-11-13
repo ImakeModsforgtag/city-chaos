@@ -55,7 +55,7 @@ async function walk(bot, from, to) {
   A.send({ type: 'create', mode: 'ffa', crimes: false });
   const ja = await A.wait(m => m.type === 'joined');
   const shops = ja.npcs.filter(n => n[1] === 1), peds = ja.npcs.filter(n => n[1] === 0);
-  ok(shops.length === 7 && peds.length === 18, `NPCs exist on join (${shops.length} shopkeepers, ${peds.length} pedestrians)`);
+  ok(shops.length === 8 && peds.length === 18, `NPCs exist on join (7 stores + the bank teller: ${shops.length} shopkeepers, ${peds.length} pedestrians)`);
   A.clear();
   const sn = await A.wait(m => m.type === 'npcs');
   const p0 = peds[0], p1 = sn.n.find(n => n[0] === p0[0]);

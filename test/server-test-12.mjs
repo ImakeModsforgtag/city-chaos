@@ -9,7 +9,7 @@ const ok = (c, msg) => { console.log((c ? '  PASS ' : '  FAIL ') + msg); if (!c)
 let nextId = 1;
 const mk = () => { const id = nextId++; return { id, token: 't' + id, msgs: [], send(m) { this.msgs.push(m); }, sendRaw(d) { this.msgs.push(JSON.parse(d)); } }; };
 let T = 1000;
-const newRoom = () => { const r = new Room('SAVE' + nextId, { mode: 'ffa', crooks: false }, { tokens: new Map() }); r.now = () => T; return r; };
+const newRoom = () => { const r = new Room('SAVE' + nextId, { mode: 'ffa', crooks: false, missions: false }, { tokens: new Map() }); r.now = () => T; return r; };
 const run = (room, sec) => { for (let i = 0; i < sec * 10; i++) { T += 0.1; room.tick(0.1); } };
 const lastSave = (p) => p.client.msgs.filter(m => m.type === 'save').pop();
 const msg = (p, type) => p.client.msgs.filter(m => m.type === type).pop();
@@ -32,13 +32,14 @@ A.cash += 500;                     // e.g. a robbery
 room.kill(B, A, 'pistol', true);   // headshot takedown
 run(room, 6);
 let tok = lastSave(A).token, p = peekToken(tok);
-ok(p.cash === START_CASH + 500, `cash saved ($${p.cash})`);
+const stole = Math.floor(START_CASH * 0.1);   // the knockout takes 10% of the victim's cash
+ok(p.cash === START_CASH + 500 + stole, `cash saved ($${p.cash}, incl. $${stole} grabbed from the knocked out player)`);
 ok(p.stats.kills === 1 && p.stats.headshots === 1, 'takedowns + headshots counted');
-ok(p.stats.earned === 500, `cash earned counted ($${p.stats.earned})`);
+ok(p.stats.earned === 500 + stole, `cash earned counted ($${p.stats.earned})`);
 ok(peekToken(lastSave(B).token).stats.deaths === 1, 'the other player\'s knockout counted');
 A.cash -= 200; run(room, 6);
 p = peekToken(lastSave(A).token);
-ok(p.cash === START_CASH + 300 && p.stats.spent === 200, `spending is saved too ($${p.cash}, spent $${p.stats.spent})`);
+ok(p.cash === START_CASH + 300 + stole && p.stats.spent === 200, `spending is saved too ($${p.cash}, spent $${p.stats.spent})`);
 const saves0 = A.client.msgs.filter(m => m.type === 'save').length; run(room, 12);
 ok(A.client.msgs.filter(m => m.type === 'save').length - saves0 <= 2, 'no save spam when nothing changes');
 run(room, 20);
@@ -46,8 +47,10 @@ p = peekToken(lastSave(A).token);
 ok(p.stats.playSec >= 40, `play time counted (${p.stats.playSec}s)`);
 
 // the match resets but your wallet doesn't
-room.endMatch({ id: A.id, name: A.name }); room.resetMatch();
-ok(A.cash === START_CASH + 300 && A.kills === 0, 'a new match resets takedowns but keeps your cash');
+room.endMatch({ id: A.id, name: A.name });
+const cashEnd = A.cash;   // (may include a level-up bonus from the match XP)
+room.resetMatch();
+ok(A.cash === cashEnd && cashEnd >= START_CASH + 300 && A.kills === 0, `a new match resets takedowns but keeps your cash ($${A.cash})`);
 p = peekToken(lastSave(A).token);
 ok(p.stats.matches === 1 && p.stats.wins === 1, 'matches played + won counted');
 
@@ -55,7 +58,7 @@ ok(p.stats.matches === 1 && p.stats.wins === 1, 'matches played + won counted');
 tok = lastSave(A).token;
 room = newRoom();
 A = room.addPlayer(mk(), { name: 'Saver', profile: tok });
-ok(A.cash === START_CASH + 300 && A.prof.stats.kills === 1, 'joining another game (or after a server restart) brings your cash + stats back');
+ok(A.cash === cashEnd && A.prof.stats.kills === 1 && A.prof.xp > 0, `joining another game (or after a server restart) brings your cash, stats and XP back (${A.prof.xp} XP, level ${A.lvl})`);
 ok(msg(A, 'profile').loaded === 1, 'told the progress was loaded');
 
 // tampering

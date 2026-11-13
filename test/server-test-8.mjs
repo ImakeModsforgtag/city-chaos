@@ -9,7 +9,7 @@ let failures = 0;
 const ok = (c, msg) => { console.log((c ? '  PASS ' : '  FAIL ') + msg); if (!c) failures++; };
 const mk = (id) => ({ id, token: 't' + id, msgs: [], send(m) { this.msgs.push(m); }, sendRaw(d) { this.msgs.push(JSON.parse(d)); } });
 let T = 1000;
-const room = new Room('GOLD1', { mode: 'ffa', crimes: false }, { tokens: new Map() });
+const room = new Room('GOLD1', { mode: 'ffa', crimes: false, progress: false }, { tokens: new Map() });
 room.now = () => T;
 const msgs = (p, type) => p.client.msgs.filter(m => m.type === type);
 const last = (p, type) => { const a = msgs(p, type); return a[a.length - 1]; };

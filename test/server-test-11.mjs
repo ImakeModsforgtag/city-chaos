@@ -9,7 +9,7 @@ let failures = 0;
 const ok = (c, msg) => { console.log((c ? '  PASS ' : '  FAIL ') + msg); if (!c) failures++; };
 const mk = (id) => ({ id, token: 't' + id, msgs: [], send(m) { this.msgs.push(m); }, sendRaw(d) { this.msgs.push(JSON.parse(d)); } });
 let T = 1000;
-const room = new Room('CROOK', { mode: 'ffa' }, { tokens: new Map() });
+const room = new Room('CROOK', { mode: 'ffa', progress: false }, { tokens: new Map() });
 room.now = () => T;
 const pose = (p, x, y, z) => { p.pose = { h: [x, y, z, 0, 0, 0, 1], l: [x, y - 0.5, z, 0, 0, 0, 1], r: [x, y - 0.5, z, 0, 0, 0, 1] }; p.hist = []; p.lastStateAt = T; };
 const run = (sec, until) => { for (let i = 0; i < sec * 10; i++) { T += 0.1; for (const p of room.players.values()) if (p.pose) p.lastStateAt = T; room.tick(0.1); if (until && until()) return true; } return false; };

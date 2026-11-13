@@ -8,7 +8,7 @@ let failures = 0;
 const ok = (c, msg) => { console.log((c ? '  PASS ' : '  FAIL ') + msg); if (!c) failures++; };
 const mk = (id) => ({ id, token: 't' + id, msgs: [], send(m) { this.msgs.push(m); }, sendRaw(d) { this.msgs.push(JSON.parse(d)); } });
 let T = 1000;
-const room = new Room('SHOP', { mode: 'ffa', crimes: false }, { tokens: new Map() });
+const room = new Room('SHOP', { mode: 'ffa', crimes: false, progress: false }, { tokens: new Map() });
 room.now = () => T;
 const last = (p, type) => p.client.msgs.filter(m => m.type === type).pop();
 const pose = (p, x, y, z) => { p.pose = { h: [x, y, z, 0, 0, 0, 1], l: [x, y - 0.5, z, 0, 0, 0, 1], r: [x, y - 0.5, z, 0, 0, 0, 1] }; p.hist = []; p.lastStateAt = T; };
@@ -23,7 +23,7 @@ const B = room.addPlayer(mk(2), { name: 'Robber' });
 T += 3; room.tick(0.03);
 for (const p of [A, B]) { room.spawn(p); p.protectUntil = 0; }
 
-const shops = Object.keys(SHOP_ITEMS);
+const shops = Object.keys(SHOP_ITEMS).filter(s => s !== 'JOB BOARD' && s !== 'CITY BANK');   // (bank + jobs have their own test)
 ok(shops.every(s => keeper(s)), `every store has a clerk (${shops.join(', ')})`);
 
 // every store's counter is reachable: nothing blocks the clerk from the customer spot
