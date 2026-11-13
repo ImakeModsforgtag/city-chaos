@@ -13,12 +13,17 @@ export class HUD {
     this.hitTimer = 0;
   }
   show(v) { this.el.classList.toggle('hidden', !v); }
-  set(id, val, prop = 'textContent') { if (this.cache[id] === val) return; this.cache[id] = val; $(id)[prop] = val; }
+  set(id, val, prop = 'textContent') { if (this.cache[id + prop] === val) return; this.cache[id + prop] = val; if (prop === 'style.width') $(id).style.width = val; else $(id)[prop] = val; }
 
   update(st) {
     const hp = Math.max(0, Math.round(st.hp));
     this.set('htext', String(hp));
     if (this.cache.hw !== hp) { this.cache.hw = hp; $('hfill').style.width = hp + '%'; $('hfill').classList.toggle('low', hp <= 30); }
+    if (st.lvl) { this.set('lvlnum', String(st.lvl.lvl)); this.set('xpfill', Math.round(st.lvl.frac * 100) + '%', 'style.width'); }
+    $('jobline').classList.toggle('hidden', !st.task);
+    if (st.task) this.set('jobline', st.task);
+    $('missions').classList.toggle('hidden', !st.missions);
+    if (st.missions) this.set('missions', st.missions, 'innerHTML');
     const ap = Math.round(st.armor || 0);
     this.set('armorbox', ap ? `🛡 <b>${ap}</b>` : '', 'innerHTML');
     this.set('boostbox', st.boost ? `⚡ BOOST ${st.boost}s` : '', 'innerHTML');
@@ -80,7 +85,7 @@ export class HUD {
     const head = b.teams ? `<h3 style="text-align:center;margin:0 0 8px"><span style="color:#ff7b8b">RED ${b.teamScores[0]}</span> : <span style="color:#7ba8ff">${b.teamScores[1]} BLUE</span> <small style="opacity:.7">(to ${b.killLimit})</small></h3>`
       : `<h3 style="text-align:center;margin:0 0 8px">FREE FOR ALL <small style="opacity:.7">(first to ${b.killLimit})</small></h3>`;
     $('scoreboard').innerHTML = head + `<table><tr><th>PLAYER</th><th>TEAM</th><th>ELIMS</th><th>DEATHS</th><th>CASH</th><th></th></tr>` +
-      b.players.map(p => `<tr class="${p.me ? 'me' : ''}"><td><span class="sw" style="background:${p.color}"></span>${esc(p.name)}${p.host ? ' 👑' : ''}${p.connected ? '' : ' (away)'}</td><td>${p.team === 0 ? '<span style="color:#ff7b8b">RED</span>' : p.team === 1 ? '<span style="color:#7ba8ff">BLUE</span>' : '-'}</td><td>${p.kills}</td><td>${p.deaths}</td><td>$${p.cash || 0}${p.wanted ? ' <span style="color:#ffd23f">' + '★'.repeat(p.wanted) + '</span>' : ''}</td><td>${p.vr ? '🥽' : '🖱'}</td></tr>`).join('') + '</table>';
+      b.players.map(p => `<tr class="${p.me ? 'me' : ''}"><td><span class="sw" style="background:${p.color}"></span><small style="color:#ffd23f">Lv${p.lvl || 1}</small> ${esc(p.name)}${p.host ? ' 👑' : ''}${p.connected ? '' : ' (away)'}</td><td>${p.team === 0 ? '<span style="color:#ff7b8b">RED</span>' : p.team === 1 ? '<span style="color:#7ba8ff">BLUE</span>' : '-'}</td><td>${p.kills}</td><td>${p.deaths}</td><td>$${p.cash || 0}${p.wanted ? ' <span style="color:#ffd23f">' + '★'.repeat(p.wanted) + '</span>' : ''}</td><td>${p.vr ? '🥽' : '🖱'}</td></tr>`).join('') + '</table>';
   }
 
   hit(head) {
@@ -102,6 +107,24 @@ export class HUD {
     const kf = $('killfeed'); kf.prepend(d);
     while (kf.children.length > 5) kf.lastChild.remove();
     setTimeout(() => d.remove(), 7000);
+  }
+  // "+25 XP Takedown" pop under the crosshair
+  xpPop(text) {
+    const el = $('xppop'); el.textContent = text; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+    clearTimeout(this.xpT); this.xpT = setTimeout(() => el.classList.remove('show'), 1400);
+  }
+  // big centered banner (LEVEL UP, MISSION COMPLETE). Several at once wait their turn.
+  levelUp(html, dur = 3500) {
+    this.banners = this.banners || [];
+    this.banners.push([html, dur]);
+    if (!this.bannerOn) this.nextBanner();
+  }
+  nextBanner() {
+    const el = $('levelup'), b = this.banners.shift();
+    if (!b) { this.bannerOn = false; el.classList.add('hidden'); return; }
+    this.bannerOn = true;
+    el.innerHTML = b[0]; el.classList.remove('hidden'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+    setTimeout(() => this.nextBanner(), this.banners.length ? Math.min(b[1], 2200) : b[1]);
   }
   notice(s, dur = 1800) {
     const n = $('notice'); n.textContent = s; n.classList.remove('hidden');

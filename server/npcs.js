@@ -187,7 +187,7 @@ export class NPCManager {
   }
 
   panic(n, fromX, fromZ) {
-    if (n.type !== NPC_TYPE.PED || n.state === NPC_STATE.DEAD || n.runner) return;
+    if (n.type !== NPC_TYPE.PED || n.state === NPC_STATE.DEAD || n.runner || n.fare) return;
     if (n.state !== NPC_STATE.PANIC && fromX !== undefined) {
       // run away from the noise along the loop
       const [ax, az] = n.loop.pts[n.seg], [bx, bz] = n.loop.pts[(n.seg + 1) % 4];
@@ -224,7 +224,7 @@ export class NPCManager {
   swatFor(p) { return p.wanted >= 5 ? Math.random() < 0.75 : p.wanted >= 4 ? Math.random() < 0.5 : false; }
   // cops show up three ways: a police car from the station, out of the donut shop (with a donut), or on foot
   spawnCopsFor(p, n) {
-    if (!p.pose || p.role === 'cop') return;
+    if (!p.pose || p.role === 'cop' || this.noCops) return;   // (noCops: automated tests only)
     if (p.jail || p.holding) return;
     for (let i = 0; i < n && this.copCount() < maxCops(p); i++) {
       const r = Math.random();
@@ -410,6 +410,7 @@ export class NPCManager {
   }
 
   updatePed(n, dt, t) {
+    if (n.fare || (!n.loop && !n.runner)) { n.state = NPC_STATE.IDLE; return; }   // a taxi passenger waiting at the curb
     if (n.runner) {
       if (t > n.runUntil) { n.remove = true; return; }
       let dx = n.x - n.fromX, dz = n.z - n.fromZ; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
@@ -444,7 +445,7 @@ export class NPCManager {
       if (n.state === NPC_STATE.DEAD) {
         if (t >= n.respawnAt) {
           if (n.type === NPC_TYPE.SHOP) { Object.assign(n, { x: n.home[0], y: n.home[1], z: n.home[2], hp: n.maxHp, state: NPC_STATE.IDLE, rob: null }); }
-          else if (n.type === NPC_TYPE.PED && n.runner) { n.remove = true; continue; }
+          else if (n.type === NPC_TYPE.PED && (n.runner || n.fare)) { n.remove = true; continue; }
           else if (n.type === NPC_TYPE.CROOK) { n.remove = true; continue; }
           else if (n.type === NPC_TYPE.PED) { const f = this.newPed(); Object.assign(n, f, { id: n.id, hist: [] }); }
           this.room.broadcast({ type: 'npcSpawn', id: n.id });

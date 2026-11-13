@@ -20,6 +20,7 @@ export function roadRoute(sx, sz, tx, tz) {
     else { const g = GRID.reduce((a, b) => (Math.abs(b - S[1]) + Math.abs(b - E[1]) < Math.abs(a - S[1]) + Math.abs(a - E[1]) ? b : a)); pts = [S, [S[0], g], [E[0], g], E]; }
   }
   pts = pts.filter((p, i) => i === 0 || Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > 0.5);
+  if (pts.length < 2) return pts.map(p => [p[0], p[1]]);   // start and end are the same spot: nothing to drive (was a crash)
   // lane offset (right side, 3m) with mitered corners
   const R = (d) => [-d[1], d[0]];
   const nrm = (x, z) => { const l = Math.hypot(x, z) || 1; return [x / l, z / l]; };

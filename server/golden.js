@@ -44,6 +44,7 @@ export class GoldenSniper {
     if (this.owner) return fail('Sold out. Somebody already has it');
     if ((p.cash || 0) < GOLDEN.price) return fail(`You need $${GOLDEN.price}`);
     p.cash -= GOLDEN.price;
+    if (this.room.saves) { this.room.saves.event(p, 'shop'); this.room.saves.event(p, 'spend', GOLDEN.price); }
     this.owner = p.id;
     this.room.giveWeapon(p, 'golden', true);
     this.room.sendInventory(p);

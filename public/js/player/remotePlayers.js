@@ -9,6 +9,9 @@ const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion();
 // role / prison clothing on top of the player's own cosmetics (jail: 1 cutscene, 2 prisoner, 3 guard disguise)
 const uniformCos = (info) => ({ ...info.cos, cop: info.role === 'cop', prisoner: info.jail === 2, guard: info.jail === 3 });
 
+// name tag over a player's head: level + name
+const tagName = (i) => `Lv${i.lvl || 1} ${i.name}`;
+
 export class RemotePlayers {
   constructor(scene, effects) {
     this.scene = scene; this.effects = effects;
@@ -20,7 +23,7 @@ export class RemotePlayers {
     if (info.id === this.myId) return null;
     let p = this.players.get(info.id);
     if (!p) {
-      const avatar = new Avatar(uniformCos(info), { name: info.name, team: info.team });
+      const avatar = new Avatar(uniformCos(info), { name: tagName(info), team: info.team });
       avatar.setRole(info.role); avatar.setWanted(info.wanted);
       this.scene.add(avatar.root);
       avatar.root.visible = false;
@@ -30,7 +33,7 @@ export class RemotePlayers {
       const cosChanged = JSON.stringify(p.info.cos) !== JSON.stringify(info.cos) || (p.info.role === 'cop') !== (info.role === 'cop') || (p.info.jail || 0) !== (info.jail || 0);
       if (cosChanged) p.avatar.setCosmetics(uniformCos(info));
       p.avatar.setRole(info.role); if (info.wanted !== undefined) p.avatar.setWanted(info.wanted);
-      if (p.info.name !== info.name || p.info.team !== info.team) { p.avatar.team = info.team; p.avatar.setName(info.name, info.team); p.avatar.setTeam(info.team); }
+      if (p.info.name !== info.name || p.info.team !== info.team || (info.lvl && p.info.lvl !== info.lvl)) { p.avatar.team = info.team; p.avatar.setName(tagName({ ...p.info, ...info }), info.team); p.avatar.setTeam(info.team); }
       p.info = { ...p.info, ...info };
     }
     if (!info.connected) p.avatar.root.visible = false;

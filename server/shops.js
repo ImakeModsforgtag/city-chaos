@@ -18,6 +18,16 @@ export function onShopBuy(room, p, m) {
   if (!p.alive || !p.pose || p.jail || p.holding || p.inCar) return fail('You can\'t shop right now');
   const t = room.now();
   if (t - (p.lastBuyAt || -9) < BUY_COOLDOWN) return;
+  // the 💼 JOBS kiosk (no clerk)
+  if (shop === 'JOB BOARD') {
+    const jb = room.npcs.map.jobBoard, h = p.pose.h;
+    if (!jb || Math.hypot(h[0] - jb[0], h[2] - jb[2]) > SHOP_RANGE + 0.6) return fail('Walk up to the JOBS kiosk');
+    p.lastBuyAt = t;
+    if (it.kind === 'jobquit') { if (!p.job) return fail('You don\'t have a job right now'); room.jobs.end(p, 'quit'); return room.sendTo(p, { type: 'shopResult', ok: 1, shop, item: id, kind: it.kind, cash: p.cash }); }
+    const r = room.jobs.start(p, id);
+    if (!r.ok) return fail(r.why);
+    return room.sendTo(p, { type: 'shopResult', ok: 1, shop, item: id, kind: it.kind, cash: p.cash });
+  }
   const n = room.npcs.list.find(q => q.type === NPC_TYPE.SHOP && q.shop === shop);
   if (!n || n.state === NPC_STATE.DEAD) return fail('Nobody is working the counter');
   if (t < n.closedUntil) return fail(`${shop} is closed (just robbed). Back in ${Math.ceil(n.closedUntil - t)}s`);
@@ -33,6 +43,15 @@ export function onShopBuy(room, p, m) {
     return d < 0.5 || room.npcs.world.raycast(hx, ey, hz, (kx - hx) / d, (y - ey) / d, (kz - hz) / d, d) >= d - 0.4;
   });
   if (!sees) return fail('Get closer to the counter');
+  // the CITY BANK teller: savings account
+  if (shop === 'CITY BANK') {
+    p.lastBuyAt = t;
+    const r = room.bank.account(p, it);
+    if (!r.ok) return fail(r.why);
+    room.sendTo(p, { type: 'shopResult', ok: 1, shop, item: id, kind: it.kind, cash: p.cash, bank: r.bank, amount: r.amount });
+    room.broadcast({ type: 'playerUpdate', p: room.publicPlayer(p) });
+    return;
+  }
   if ((p.cash || 0) < it.price) return fail(`You need $${it.price} (you have $${p.cash || 0})`);
 
   // does it do anything for you right now? (don't take money for nothing)
@@ -69,6 +88,13 @@ export function onShopBuy(room, p, m) {
     }
   }
   p.buys = (p.buys || 0) + 1;
+  // daily missions
+  const S = room.saves;
+  S.event(p, 'shop'); S.event(p, 'spend', it.price);
+  if (it.kind === 'heal' && shop !== 'MEGA MART') S.event(p, 'food');
+  if (it.kind === 'lotto') S.event(p, 'lotto');
+  if (it.kind === 'boost') S.event(p, 'boost');
+  if (it.kind === 'armor') S.event(p, 'armor');
   room.sendTo(p, res);
   room.broadcast({ type: 'playerUpdate', p: room.publicPlayer(p) });
   room.sendTo(p, { type: 'npcSay', id: n.id, text: it.kind === 'lotto' ? (res.win ? `WINNER! $${res.win}` : 'Better luck next time!') : 'Thanks! Come again!' });

@@ -65,6 +65,10 @@ export const SHOP_ITEMS = {
   ]
 };
 
+import { BANK_ITEMS, JOB_ITEMS, JOBS } from './economy.js';
+SHOP_ITEMS['CITY BANK'] = BANK_ITEMS;     // the bank teller (deposit / withdraw)
+SHOP_ITEMS['JOB BOARD'] = JOB_ITEMS;     // the 💼 JOBS kiosk
+
 export function shopItem(shop, id) {
   const list = SHOP_ITEMS[shop];
   return list ? list.find(i => i.id === id) || null : null;
@@ -79,6 +83,10 @@ export function itemInfo(it) {
     case 'armor': return `+${it.ap} armor`;
     case 'boost': return [it.speed > 1 ? `${it.speed}x speed` : '', it.jump > 1 ? `${it.jump}x jump` : ''].filter(Boolean).join(' + ') + ` for ${it.dur}s`;
     case 'lotto': return `win up to $${Math.max(...it.odds.map(o => o[1]))}`;
+    case 'deposit': return it.amount ? 'safe from robbers + earns 2% a day' : 'put all your cash in savings';
+    case 'withdraw': return it.amount ? 'take cash out of savings' : 'take all your savings out';
+    case 'job': return JOBS[it.id].about;
+    case 'jobquit': return 'stop the job you are doing';
   }
   return '';
 }

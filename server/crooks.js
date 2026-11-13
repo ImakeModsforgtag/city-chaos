@@ -336,7 +336,7 @@ export class Crooks {
     if (p) {
       const pay = CROOK.arrestPay + (n.loot || 0);
       p.cash = (p.cash || 0) + pay;
-      this.room.saves.stat(p, 'crooks');
+      this.room.saves.stat(p, 'crooks', 1, 'crookArrest');
       this.room.sendTo(p, { type: 'crook', ev: 'bounty', id: n.id, cash: pay, loot: n.loot || 0, total: p.cash, arrest: 1 });
       this.room.broadcast({ type: 'playerUpdate', p: this.room.publicPlayer(p) });
     }

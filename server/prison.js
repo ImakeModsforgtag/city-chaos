@@ -1,6 +1,7 @@
 // CITY CHAOS - server-side prison: arrests, the cutscene timer, schedule, guards, cameras, alarms,
 // escape items/doors and basketball. Everything is decided here so every player in the room sees
 // the same doors, alarms and escape progress, and nobody can fake an escape.
+import { BANK } from '../public/shared/economy.js';
 import { PHASES, PHASE, ITEMS, PERIM, inPrisonArea } from '../public/shared/prison.js';
 import { NPC_STATE } from './npcs.js';
 
@@ -68,6 +69,11 @@ export class PrisonManager {
     const at = p.pose ? p.pose.h.slice(0, 3).map(r2) : [0, 1.5, 0];
     if (byPlayer && stars) byPlayer.cash = (byPlayer.cash || 0) + stars * 200; // arresting pays a double bounty
     if (byPlayer && room.gold) room.gold.onArrest(byPlayer);
+    // the police confiscate a share of the cash you carry (half of it goes to the arresting cop)
+    if ((p.cash || 0) > 0) {
+      const took = Math.floor(p.cash * BANK.arrestLoss);
+      if (took > 0) { p.cash -= took; if (byPlayer) byPlayer.cash = (byPlayer.cash || 0) + Math.floor(took / 2); room.sendTo(p, { type: 'cashLost', amt: took, why: 'arrest' }); }
+    }
     if (byPlayer) room.saves.stat(byPlayer, 'arrests');
     this.saveInventory(p);
     room.npcs.clearWanted(p);

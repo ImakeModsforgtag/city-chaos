@@ -38,6 +38,7 @@ export function buildMap() {
   const spawns = [];     // player spawn points  { p:[x,y,z], team:-1|0|1 }
   const labels = [];     // signs { text, p:[x,y,z], rotY, color }
   const policeLot = [], copSpawns = [], policeExit = [];
+  let bank = null, jobBoard = null;   // CITY BANK (vault heist) + the JOB BOARD kiosk
   let holding = null;   // police station holding cells (short arrests, under 3 stars)
   const shops = [];      // robbable stores { name, keeper:[x,y,z], yaw } (yaw 0 = facing -Z)
   const buildings = [];  // every building, so the client can add facades (windows, frames, storefronts, roofs)
@@ -531,9 +532,43 @@ export function buildMap() {
     for (const [bx, bz, yaw] of [[18, 22, Math.PI / 2], [33, 22, -Math.PI / 2], [25.5, 28.5, 0]]) { const hx = Math.abs(Math.sin(yaw)) > 0.5 ? 0.3 : 1, hz = Math.abs(Math.sin(yaw)) > 0.5 ? 1 : 0.3; box(x + bx - hx, Y, z + bz - hz, x + bx + hx, Y + 0.5, z + bz + hz, PALETTE.wood); props.push({ type: 'parkBench', x: x + bx, y: Y, z: z + bz, yaw }); }
     box(x + 37.5, Y, z + 36.5, x + 40.5, Y + 1.1, z + 39.5, 0xd7d0c4);
     props.push({ type: 'statue', x: x + 39, y: Y + 1.1, z: z + 38 });
-    pickup('ammo', null, x + 24, Y + 0.9, z + 10);
+    pickup('ammo', null, x + 36, Y + 0.9, z + 12);   // (moved off the JOBS kiosk spot)
     pickup('weapon', 'revolver', x + 25.5, Y + 4.8, z + 23.5);
     spawns.push({ p: [x + 34, Y, z + 6], team: -1 });
+    // ---- CITY BANK (west side of the plaza): teller in the lobby, the vault behind a steel door at the back
+    {
+      const bx0 = x + 3, bz0 = z + 3, bw = 12, bd = 24, BH = 4.6;
+      hollow(bx0, bz0, bw, bd, { floors: 1, fh: BH, color: 0xe9e2cf, trim: 0x6d4c41, stairs: false, roofKit: false, style: 'office',
+        doors: [{ side: 'e', at: 6, width: 3, h: 3.3 }], sign: 'CITY BANK', signPos: [bx0 + bw + 0.06, 3.85, bz0 + 7.5], signRot: Math.PI / 2, signBg: '#1b5e20', signColor: '#ffd700' });
+      // columns by the door
+      for (const cz of [bz0 + 4.4, bz0 + 10.6]) box(bx0 + bw, Y, cz - 0.35, bx0 + bw + 0.7, Y + BH, cz + 0.35, 0xf5f0e1);
+      box(bx0 + bw, Y, bz0 + 5.6, bx0 + bw + 1.6, Y + 0.18, bz0 + 9.4, 0xd7ccc8);   // front step
+      // teller counter (glass on top) + the teller
+      box(bx0 + 0.3, Y, bz0 + 2.6, bx0 + 6.2, Y + 1.1, bz0 + 3.4, 0x5d4037);
+      box(bx0 + 0.3, Y + 1.1, bz0 + 2.95, bx0 + 6.2, Y + 2.0, bz0 + 3.05, 0xbfe9ff, false);
+      shops.push({ name: 'CITY BANK', keeper: [bx0 + 3.2, Y, bz0 + 1.4], yaw: Math.PI });
+      // velvet rope posts + a plant
+      for (const pz of [bz0 + 6, bz0 + 9]) box(bx0 + 4.6, Y, pz - 0.1, bx0 + 4.8, Y + 1.0, pz + 0.1, 0xffd700);
+      box(bx0 + 9.6, Y, bz0 + 1.0, bx0 + 10.6, Y + 0.7, bz0 + 2.0, 0x8d6e63);
+      props.push({ type: 'tree', x: bx0 + 10.1, y: Y + 0.7, z: bz0 + 1.5, s: 0.45 });
+      // vault wall with the vault door (the door is drawn + opened by the client: js/world/bank.js)
+      const vz = bz0 + 16;
+      box(bx0 + 0.3, Y, vz, bx0 + 4.5, Y + BH, vz + 0.4, 0x9e9e9e);
+      box(bx0 + 7.5, Y, vz, bx0 + bw - 0.3, Y + BH, vz + 0.4, 0x9e9e9e);
+      box(bx0 + 4.5, Y + 3.0, vz, bx0 + 7.5, Y + BH, vz + 0.4, 0x9e9e9e);
+      box(bx0 + 4.5, Y, vz - 0.1, bx0 + 7.5, Y + 3.0, vz + 0.5, 0x78909c);
+      boxes[boxes.length - 1].v = 0; boxes[boxes.length - 1].vaultDoor = 1;   // (find it with .vaultDoor: collision worlds re-index boxes)
+      const doorIdx = boxes.length - 1;
+      // vault floor + shelves at the back
+      box(bx0 + 0.3, 0.03, vz + 0.4, bx0 + bw - 0.3, 0.06, bz0 + bd - 0.3, 0x546e7a, false);
+      box(bx0 + 0.3, Y, bz0 + bd - 1.2, bx0 + bw - 0.3, Y + 2.4, bz0 + bd - 0.3, 0x455a64);
+      bank = { doorIdx, door: [bx0 + 4.5, Y, vz - 0.1, bx0 + 7.5, Y + 3.0, vz + 0.5], drill: [bx0 + 6, Y, vz - 1.1],
+               loot: [[bx0 + 2.5, Y, bz0 + 20.5], [bx0 + 6, Y, bz0 + 21.5], [bx0 + 9.5, Y, bz0 + 20.5]],
+               center: [bx0 + bw / 2, Y, bz0 + bd / 2], vault: { x0: bx0 + 0.3, z0: vz + 0.4, x1: bx0 + bw - 0.3, z1: bz0 + bd - 0.3 } };
+    }
+    // the plaza kiosk is the JOB BOARD now
+    labels.push({ text: '💼 JOBS', p: [x + 24, 2.2, z + 7.06], rotY: 0, color: '#ffffff', bg: '#1565c0' });
+    jobBoard = [x + 24, Y, z + 8.6];
   }
 
   // (1,3) Gas station
@@ -898,5 +933,5 @@ export function buildMap() {
   const donutDoor = dn ? [dn.keeper[0], 0.15, dn.keeper[2] + 12.2] : [0, 0, 0]; // just outside the donut shop's front door
   const prison = buildPrison();
   return { boxes, ladders, windows, props, pickups, spawns, labels, shops, trafficLoops, policeLot, copSpawns, policeExit, donutDoor, holding, prison, worldHalf: WORLD_HALF, blockStarts: BLOCK_STARTS, block: BLOCK,
-           buildings, openings, trafficLights, stopSigns, furniture, districts: BLOCK_DISTRICT };
+           buildings, openings, trafficLights, stopSigns, furniture, districts: BLOCK_DISTRICT, bank, jobBoard };
 }
