@@ -256,6 +256,110 @@ Your **cash** and **lifetime stats** now save automatically and carry over betwe
 - **Set `PROFILE_SECRET` on your server** (Render > your service > Environment > add `PROFILE_SECRET` with any long random
   text). Do it once and never change it: changing it makes every existing save unreadable.
 
+## 8-quater. Levels and XP
+
+You earn **XP** for playing and go up in **levels** (max level 50). Your level is saved with your progress.
+
+| Action | XP |
+|---|---|
+| Takedown | 25 (+10 for a headshot) |
+| Arresting a wanted player | 60 |
+| Robbing a store | 40 |
+| Stopping an NPC robber | 50 (arresting one as a cop: 70) |
+| Hijacking a car | 5 |
+| Finishing a match | 30 (+70 if you win) |
+| Every minute played | 4 |
+
+- Level 2 takes 100 XP, level 5 about 500, level 10 about 2,100, level 20 about 11,000 and level 50 about 82,600.
+- **Level-up bonus:** every new level pays cash ($50 + $25 x the level) and shows a big LEVEL UP banner (VR: a notice and a controller buzz).
+  Everyone else sees "⭐ Name reached level N" in the feed.
+- **Your level is shown** on the HUD (badge + XP bar above your health), on your VR wrist, over your head (Lv12 Name),
+  and on the scoreboard. Small "+25 XP · Takedown" pops show under the crosshair.
+- **Unlocks:** some cosmetics unlock with levels. In CUSTOMIZE you can still try them on (they show 🔒 Lv N), but in games
+  other players see the default until you reach that level. The server enforces this.
+
+| Level | Unlock |
+|---|---|
+| 2 | Top Hat |
+| 3 | Jetpack |
+| 4 | Beanie |
+| 5 | Visor |
+| 6 | Traffic Cone hat |
+| 7 | Guitar |
+| 8 | Cowboy hat |
+| 9 | Cape |
+| 10 | Monocle |
+| 12 | Crown |
+| 14 | Bean head |
+| 16 | Robot body |
+
+- **MY PROGRESS** shows your level, an XP bar, XP to the next level and what unlocks next.
+
+## 8-quinquies. Daily missions
+
+Every day at **midnight Pacific time** everyone gets the same **3 daily missions**, picked from 15 kinds:
+take down players, land headshots, stop NPC robbers, hijack cars, buy things at stores, buy food, spend or earn cash,
+play for a while, finish or win matches, try your luck at the arcade / scratch tickets, buy boosts or armor, and
+**stand on the very top of the Chaos Tower** (the server checks where you really are).
+
+- Each mission pays **cash + XP** the moment you finish it (a MISSION COMPLETE banner, VR: notice + chime).
+- Finish **all 3** for a bonus of **+$300 and +150 XP**.
+- **Where to see them:** the mission list pops up on the left for a few seconds when you join and whenever progress
+  changes; hold **Tab** (or pause) to see it any time. In VR: **Y menu > 📋 DAILY MISSIONS**. On the main menu:
+  **📊 MY PROGRESS**. Each shows progress bars, rewards and when the next missions arrive.
+- Progress is saved with the rest of your profile. A new day replaces the missions even mid-game.
+- Several banners at once (mission complete + level up) now wait their turn instead of covering each other.
+
+## 8-sexies. The CITY BANK, the vault heist and jobs
+
+The **CITY BANK** stands on the west side of the downtown plaza (above the parking garage). The plaza kiosk is now the
+**💼 JOBS** board.
+
+**Savings (the teller in the lobby)** — walk up and press **E** (Quest: squeeze grip): Deposit $100 / $500 / ALL,
+Withdraw $100 / $500 / ALL.
+- Savings are saved with your progress and grow **2% a day** (real days, also while you're offline, at most $1,000 a day).
+  You're told how much interest you earned when you come back.
+- **Why bother:** cash in your pocket is at risk now. Get knocked out by another player and they grab **10% of the cash
+  you carry** (at most $300). Get arrested and the police confiscate **25%** (half goes to the cop). Savings are always safe.
+- Moving money in or out isn't counted as cash earned or spent.
+
+**The vault heist** (civilians only)
+1. Go behind the teller to the big steel **vault door** and **hold E** (Quest: hold grip) to drill it for **15 seconds**.
+   The alarm goes off (**1 wanted star**, cops get the 🚨 alert). Stop drilling and the drill cools down.
+2. The door swings open (**+1 star**). Inside are **3 cash stacks** ($700 to $1,100 each). Press **E** / grip next to one
+   to grab it (**+1 star**). One stack per person, so bring friends.
+3. **Get 120 m away from the bank** with it to keep it (+150 XP). Knocked out or arrested on the way and it's gone.
+4. The vault closes after 90 seconds and the bank goes on **lockdown for 8 minutes**.
+- A line at the top of the screen shows how much further you have to run.
+
+**Jobs** (anyone; at the 💼 JOBS kiosk press E / grip)
+- **📦 Food Delivery:** pick up an order at a food store counter (SNAX, DONUTS, STAR DINER or GAS & GO), then run it to a
+  customer's door (houses and apartment buildings) before the timer runs out. Late = half pay; very late = cancelled.
+- **🚕 Taxi Driver:** get any car (E / grip on a car), drive to the passenger waiting on the sidewalk and **stop** next to
+  them, then drive them to their stop and stop again.
+- A **big glowing beam** marks where to go (green = pick up, yellow = drop off), and the top line shows the task, an
+  arrow + distance and the timer (VR: a notice every few seconds). Pay grows with the distance ($100 to $300 a run) and
+  every job gives 40 to 50 XP. You can quit a job at the kiosk.
+- New daily missions: **Finish N jobs** and **Put $N in the CITY BANK**. New stats on MY PROGRESS: jobs done, bank
+  heists and interest earned. MY PROGRESS also shows your savings.
+
+## 8-septies. First-time tutorial and bug reports
+
+**Tutorial.** New players get a short 7-step tutorial the first time they're in the city (blue panel at the top on PC,
+notices in VR): move, jump/climb, shoot, open the daily missions (Tab on PC, Y menu in VR), follow a glowing beam to the
+💼 JOBS kiosk, open it, done. Each step checks that you actually did it (a few steps move on by themselves after a while
+so nobody gets stuck). Finishing it pays **$100 + 50 XP, once per save**; skipping (K on PC, SKIP TUTORIAL in the VR
+menu) pays nothing. Replay it any time from HOW TO PLAY > 🎓 PLAY THE TUTORIAL (no second reward).
+
+**Bug reports.** Players can send a bug report from the pause menu (🐞 REPORT A BUG, type what happened) or the VR menu
+(🐞 REPORT A BUG HERE: sends their position and what they were doing). The game also reports its own crashes and script
+errors automatically (at most 8 per player per session). Every report goes into the server log as a `[BUG]` or
+`[CLIENT ERROR]` line (Render > your service > Logs) with the player, room, position, frame rate, browser and game
+version.
+- **To see them on a web page:** in Render > your service > Environment, add `ADMIN_KEY` with any password you like,
+  save, then open `https://YOUR-GAME.onrender.com/bugs?key=YOUR_PASSWORD`. Without `ADMIN_KEY` the page doesn't exist.
+  The page keeps the last 300 reports since the server last started (the logs keep them longer).
+
 ## 8-bis. NPC bad guys: robbers and car thieves
 
 Every 35 to 70 seconds a masked robber (black hoodie, black beanie, red bandana, a gun) shows up somewhere in the city.
@@ -382,7 +486,9 @@ city-chaos/
 │   ├── room.js             authoritative game: hits, damage, ammo, pickups, kills, respawns, modes
 │   ├── npcs.js             pedestrians, shopkeepers, cops, SWAT, robbery, wanted stars, NPC arrests
 │   ├── crooks.js           NPC robbers + car thieves: store holdups, stealing cars, fleeing, fighting back, bounties
-│   ├── profiles.js         saved progress: signed save tokens, stats, autosave
+│   ├── bank.js             CITY BANK: savings accounts, interest, the vault heist
+│   ├── jobs.js             delivery + taxi jobs
+│   ├── profiles.js         saved progress: signed save tokens, stats, XP + levels, daily missions, autosave
 │   ├── shops.js            buying at the stores: counter + cash checks, guns, ammo, food, armor, boosts, lottery
 │   ├── vehicles.js         NPC traffic, police cars, dispatch, the prison van
 │   └── prison.js           arrests, cutscene timer, prison schedule, guards, cameras, alarms, escapes, basketball
@@ -420,6 +526,11 @@ city-chaos/
 ## 11. What was tested, and what still needs your real headset
 
 **Tested and passing:**
+- **Tutorial + bug reports (`test/server-test-16.mjs`, `test/browser/tutorial_test.py`):** the reward paid once per save, nothing for skipping, no second reward after coming back with the same save; in the browser every one of the 7 steps on PC (including the beam to the kiosk), the COMPLETE banner and cash, skipping with K, not showing again on the next visit, the VR steps and SKIP TUTORIAL in the VR menu; a bug report from the pause menu reaching the server log, automatic error reports (script errors and failed promises) and the `/bugs` page (hidden without the key).
+- **Soak tests:** `test/soak-test.mjs` runs 8 bots doing random things for 20 to 40 simulated minutes on a fake clock and checks nothing breaks (cash never negative, no NaN positions, no stuck players, no crashes). `test/browser/browser_soak_test.py` runs 2 desktop players and an emulated Quest 3 in one room for 3 minutes of random keys, clicks, menus, teleports and shooting: zero page errors and zero server errors.
+- **CITY BANK + jobs (`test/server-test-15.mjs`, `test/browser/bank_jobs_test.py`, `test/browser/quest3_bank_jobs_test.py`):** deposits, withdrawals, not counted as earned/spent, saved, interest (2%/day, capped), only at the teller; knockouts taking 10% of pocket cash (max $300), arrests confiscating 25%, savings safe; the heist (cops can't drill, alarm + stars, drill cooling down, door opening and its collision going away, a separate door per room, grabbing one stack each, escaping 120 m to keep it, losing it when knocked out, the vault closing and the lockdown, new players getting the vault state); delivery jobs (on time, late = half pay, too late = cancelled, quit), taxi jobs (needs a car, real passenger NPC, stopping to pick up and drop off, out of the car too long = failed). In the browser on PC and an emulated Quest 3: the bank building, the teller and JOBS menus, a full delivery with the marker, and a full heist from drilling to getting away.
+- **Daily missions (`test/server-test-14.mjs`, `test/browser/missions_test.py`):** 3 different missions a day, the same for everyone, changing daily, every kind showing up over time, progress from real takedowns / store purchases / the Chaos Tower roof, cash + XP rewards, the all-3 bonus, no double rewards, saved progress, new day reset mid-game (also tested on a dozen different days); in the browser: the tracker, progress bars, banners (queued), Tab, MY PROGRESS and the VR menu page.
+- **Levels and XP (`test/server-test-13.mjs`, `test/browser/level_test.py`):** the level curve, XP for takedowns, headshots, robberies, robbers, cars, matches, wins and time played (none for dying), level-up cash bonuses (also when jumping several levels), unlock announcements, everyone seeing your level, locked cosmetics showing as the default until unlocked, XP saved and loaded; in the browser: HUD badge + XP bar, XP pops, LEVEL UP banner, level on the other player's screen and the scoreboard, 🔒 labels in CUSTOMIZE and the level on MY PROGRESS.
 - **Saved progress (`test/server-test-12.mjs`, `test/browser/save_test.py`):** new players get $200, cash and stats (takedowns, headshots, deaths, earned, spent, play time, matches, wins) are saved, a new match keeps your cash, a new room / server restart loads them back, edited or junk saves are rejected, old mod menu messages are ignored, leaving saves right away, and in the browser: the save survives leaving and coming back, MY PROGRESS shows it, START OVER erases it.
 - **NPC robbers and car thieves (`test/server-test-11.mjs`, `test/browser/crook_test.py`):** a robber walks in through the door and robs every one of the 7 stores, the clerk puts their hands up, the store closes, he escapes with the cash; bounty + stolen cash for shooting one with no wanted stars; robbers shooting back; NPC police responding after a delay and getting him; cop players arresting (E) and civilians not; surrendering; car thieves stealing a car at a light, the driver running off, speeding, taking the car back with no stars, shooting the driver stopping the car, the joyride ending; robbers showing up by themselves (max 2) and the CROOKS=off switch. In the browser: the masked robber, the holdup, the cash bag, the car thief in the driver's seat and the cop arrest prompt.
 - **PC wall climbing (`test/browser/wall_climb_test.py`):** walking into a wall without Space stays on the ground, holding Space climbs a 9 m building and pulls up onto the roof, letting go drops you, and the old mod menu code does nothing.

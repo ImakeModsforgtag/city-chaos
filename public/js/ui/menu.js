@@ -7,6 +7,7 @@ import { esc } from './hud.js';
 import * as audio from '../audio/audio.js';
 
 const $ = (id) => document.getElementById(id);
+import { unlockLevel } from '/shared/levels.js';
 const CATALOG = { head: HEADS, body: BODIES, hat: HATS, glasses: GLASSES, back: BACKS };
 const SWATCHES = ['#ff9f1c', '#ff3d7f', '#3a86ff', '#2ec27e', '#8338ec', '#ffd23f', '#ff5252', '#00d4d4', '#a0522d', '#f5f5f5', '#333344', '#ff8fd8'];
 
@@ -101,6 +102,10 @@ export class Menu {
     if (a === 'mic') cb.onMic();
     if (a === 'team') cb.onTeam();
     if (a === 'resume') cb.onResume();
+    if (a === 'tutorial') { this.cb.onTutorial?.(); return; }
+    if (a === 'bug') { document.getElementById('bugbox').classList.remove('hidden'); document.getElementById('bugmsg').textContent = ''; document.getElementById('bugtext').focus(); }
+    if (a === 'bugcancel') document.getElementById('bugbox').classList.add('hidden');
+    if (a === 'bugsend' && cb.onBug) { const el = document.getElementById('bugtext'); if (el.value.trim().length < 4) { document.getElementById('bugmsg').textContent = 'Please describe the bug a little.'; return; } cb.onBug(el.value.trim()); el.value = ''; }
     if (a === 'pause-settings') cb.onPauseGo('settings');
     if (a === 'pause-custom') cb.onPauseGo('custom');
     if (a === 'randomize') {
@@ -195,7 +200,13 @@ export class Menu {
     this.syncCustom();
   }
   syncCustom() {
-    document.querySelectorAll('.cycler').forEach(cy => { cy.querySelector('b').textContent = CATALOG[cy.dataset.key][profile.cos[cy.dataset.key]]; });
+    // items you haven't unlocked yet: you can try them on here, but in games they show as the default until you reach the level
+    const lvl = this.cb.level ? this.cb.level() : 99;
+    document.querySelectorAll('.cycler').forEach(cy => {
+      const key = cy.dataset.key, idx = profile.cos[key], need = unlockLevel(key, idx), b = cy.querySelector('b');
+      b.textContent = CATALOG[key][idx] + (need > lvl ? ` 🔒 Lv ${need}` : '');
+      b.classList.toggle('locked', need > lvl);
+    });
     document.querySelectorAll('#swatches i').forEach((i, k) => i.classList.toggle('on', SWATCHES[k] === profile.cos.color));
     document.querySelectorAll('#accent-swatches i').forEach((i, k) => i.classList.toggle('on', SWATCHES[k] === profile.cos.accent));
   }

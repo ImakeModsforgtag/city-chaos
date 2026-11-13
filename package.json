@@ -5,7 +5,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "test": "node test/server-test.mjs && node test/server-test-2.mjs && node test/server-test-3.mjs && node test/server-test-4.mjs && node test/server-test-5.mjs && node test/server-test-6.mjs && node test/server-test-7.mjs && node test/server-test-8.mjs && node test/server-test-10.mjs && node test/server-test-11.mjs && node test/server-test-12.mjs"
+    "test": "node test/server-test.mjs && node test/server-test-2.mjs && node test/server-test-3.mjs && node test/server-test-4.mjs && node test/server-test-5.mjs && node test/server-test-6.mjs && node test/server-test-7.mjs && node test/server-test-8.mjs && node test/server-test-10.mjs && node test/server-test-11.mjs && node test/server-test-12.mjs && node test/server-test-13.mjs && node test/server-test-14.mjs && node test/server-test-15.mjs && node test/server-test-16.mjs && node test/soak-test.mjs 20"
   },
   "license": "UNLICENSED",
   "dependencies": {

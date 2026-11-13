@@ -1,6 +1,7 @@
 // CITY CHAOS - Node.js server: serves the website AND runs the WebSocket multiplayer.
 // One process, one port, so it deploys to a single web service (Render, Railway, Fly.io...).
 import express from 'express';
+import { bugsPage } from './bugs.js';
 import http from 'http';
 import path from 'path';
 import crypto from 'crypto';
@@ -33,6 +34,7 @@ const state = {
   rooms: new Map(),     // code -> Room
   tokens: new Map(),    // reconnect token -> { code, id }
 };
+app.get('/bugs', bugsPage);   // bug reports (needs ADMIN_KEY)
 app.get('/health', (req, res) => res.json({ ok: true, rooms: state.rooms.size, uptime: Math.round(process.uptime()) }));
 // Optional: set ICE_SERVERS env var (JSON array) to add a TURN server for voice chat on strict networks
 app.get('/api/ice', (req, res) => {
@@ -82,7 +84,7 @@ wss.on('connection', (ws, req) => {
     if (!msg || typeof msg.type !== 'string') return;
 
     if (msg.type === 'ping') return client.send({ type: 'pong', t: msg.t, st: now() });
-    if (msg.type === 'clientError') { console.log(`[client error] player ${client.id}: ${String(msg.msg).slice(0, 300)}\n${String(msg.stack || '').slice(0, 600)}`); return; }
+    // clientError goes to the room (server/bugs.js logs it with the player's name, position and game version)
 
     if (msg.type === 'hello') {
       client.info = { name: msg.name, cos: msg.cos };

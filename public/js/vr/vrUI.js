@@ -101,7 +101,9 @@ export class VRUI {
     const s = m.settings;
     const items = [
       { label: '▶  RESUME', color: '#2ec27e', act: 'resume' },
+      ...(m.tutorial ? [{ label: '⏭  SKIP TUTORIAL', color: '#00b4d8', act: 'tutskip' }] : []),
       { label: m.role === 'cop' ? 'ROLE: 👮 COP (click to be a civilian)' : 'ROLE: 🧑 CIVILIAN (click to be a cop)', color: m.role === 'cop' ? '#1f3a93' : '#ff9f1c', act: 'role' },
+      ...(m.missions ? [{ label: `📋  DAILY MISSIONS (${m.missions})`, color: '#2ec27e', act: 'missions' }] : []),
       { label: `MOVEMENT: ${s.moveMode === 'gorilla' ? 'GORILLA ARMS' : s.moveMode === 'both' ? 'ARMS + STICK' : 'JOYSTICK'}`, color: '#3a86ff', act: 'move' },
       { label: `BODY SIZE: ${s.vrSize === 'human' ? 'HUMAN (REAL HEIGHT)' : s.vrSize === 'small' ? 'SMALL (STANDING)' : 'GORILLA (GORILLA TAG)'}`, color: '#2ec27e', act: 'size' },
       { label: 'STAND TALL + CLICK: RECALIBRATE', color: '#2ec27e', act: 'calibrate' },
@@ -111,11 +113,12 @@ export class VRUI {
       { label: `SHADOWS: ${s.shadows ? 'ON' : 'OFF'}`, color: '#8338ec', act: 'shadows' },
       ...(m.teams ? [{ label: 'SWITCH TEAM', color: '#ff9f1c', act: 'team' }] : []),
       ...(m.isHost ? [{ label: `MODE: ${m.mode === 'tdm' ? 'TEAM DEATHMATCH' : 'FREE FOR ALL'} (host)`, color: '#ff3d7f', act: 'mode' }] : []),
+      { label: '🐞  REPORT A BUG HERE', color: '#c9a227', act: 'bug' },
       { label: '🚪  LEAVE ROOM', color: '#6c6f8a', act: 'leave' }
     ];
     const key = JSON.stringify(items.map(i => i.label)) + this.hover + m.code;
     // button hit areas are rebuilt EVERY frame (drawing only happens when something changes)
-    const step = items.length > 12 ? 87 : 94;
+    const step = Math.min(94, Math.floor((1400 - 225 - 24) / items.length));   // always fits the panel, however many buttons
     this.buttons = items.map((it, i) => ({ x: 80, y: 225 + i * step, w: 1024 - 160, h: step - 10, act: it.act }));
     this.menu.draw(key, (x, w, h) => {
       box(x, 0, 0, w, h, '#fff8ef', 40, INK, 10);
@@ -124,7 +127,7 @@ export class VRUI {
       items.forEach((it, i) => {
         const b = this.buttons[i];
         box(x, b.x, b.y, b.w, b.h, this.hover === i ? '#ffffff' : it.color, 24, INK, 8);
-        text(x, it.label, w / 2, b.y + 44, 40, this.hover === i ? it.color : '#fff');
+        text(x, it.label, w / 2, b.y + (step - 10) / 2 + 2, step < 84 ? 34 : 40, this.hover === i ? it.color : '#fff');
       });
     });
   }
@@ -159,7 +162,7 @@ export class VRUI {
         const y = 260 + i * 76;
         x.fillStyle = r.color; roundRect(x, 70, y - 24, 48, 48, 12); x.fill();
         const tc = r.team === 0 ? '#ff7b8b' : r.team === 1 ? '#7ba8ff' : '#fff';
-        text(x, (r.me ? '★ ' : '') + r.name + (r.connected ? '' : ' (away)'), 140, y, 42, r.me ? '#ffd23f' : tc, 'left');
+        text(x, (r.me ? '★ ' : '') + `Lv${r.lvl || 1} ` + r.name + (r.connected ? '' : ' (away)'), 140, y, 42, r.me ? '#ffd23f' : tc, 'left');
         text(x, String(r.kills), 660, y, 44); text(x, String(r.deaths), 760, y, 44); text(x, String(r.cash || 0), 890, y, 36, '#7dff9a');
       });
     });
@@ -190,7 +193,7 @@ export class VRUI {
     // wrist + gun screens always face the player
     this.wrist.mesh.lookAt(camPos); this.ammo.mesh.lookAt(camPos);
     const hp = Math.round(st.hp);
-    this.wrist.draw(`${hp}|${st.timer}|${st.kills}|${st.deaths}|${st.teamText}|${st.cash}|${st.wanted}|${st.armor}|${st.boost}`, (x, w, h) => {
+    this.wrist.draw(`${hp}|${st.timer}|${st.kills}|${st.deaths}|${st.teamText}|${st.cash}|${st.wanted}|${st.armor}|${st.boost}|${st.lvl ? st.lvl.lvl + ':' + Math.round(st.lvl.frac * 20) : ''}`, (x, w, h) => {
       box(x, 0, 0, w, h, 'rgba(29,20,66,0.88)', 30, INK, 8);
       text(x, '❤ ' + hp, 20, 46, 48, hp > 30 ? '#5dff9b' : '#ff5d5d', 'left');
       text(x, st.timer, w - 20, 46, 42, '#ffd23f', 'right');
@@ -198,7 +201,12 @@ export class VRUI {
       x.fillStyle = '#2a1f55'; roundRect(x, 20, 86, w - 40, 30, 12); x.fill();
       x.fillStyle = hp > 30 ? '#2ec27e' : '#ff3b3b'; roundRect(x, 20, 86, (w - 40) * Math.max(0, hp) / 100, 30, 12); x.fill();
       const stars = '★'.repeat(st.wanted || 0);
-      text(x, stars ? `${stars}  $${st.cash || 0}` : (st.teamText || `K ${st.kills} D ${st.deaths}  $${st.cash || 0}`), w / 2, 158, stars ? 38 : 30, stars ? '#ffd23f' : '#fff');
+      text(x, stars ? `${stars}  $${st.cash || 0}` : (st.teamText || `K ${st.kills} D ${st.deaths}  $${st.cash || 0}`), w / 2, st.lvl ? 140 : 158, stars ? 38 : 30, stars ? '#ffd23f' : '#fff');
+      if (st.lvl) {   // level + XP bar
+        text(x, 'LV ' + st.lvl.lvl, 20, 178, 26, '#ffd23f', 'left');
+        x.fillStyle = '#0006'; roundRect(x, 100, 171, w - 120, 14, 7); x.fill();
+        x.fillStyle = '#ffd23f'; roundRect(x, 100, 171, Math.max(8, (w - 120) * st.lvl.frac), 14, 7); x.fill();
+      }
     });
     const ws = st.weapon;
     this.ammo.mesh.visible = !!ws;
@@ -219,7 +227,7 @@ export class VRUI {
       if (st.wanted) { text(x, '★'.repeat(st.wanted) + '☆'.repeat(5 - st.wanted), w / 2, 40, 54, '#ffd23f'); text(x, WANTED_VR[st.wanted], w / 2, 88, 26, '#ff9f9f'); }
       if (st.prison) { const lines = st.prison.vr.split('\n'); box(x, 10, 10, 420, 30 + lines.length * 34, 'rgba(29,20,66,0.78)', 16, INK, 4); lines.forEach((l, i) => text(x, l, 24, 40 + i * 34, 26, i === 0 ? '#ffd23f' : l.startsWith('⚠') ? '#ff5d5d' : '#fff', 'left')); }
       if (st.sub) { const s = st.sub.replace(/<[^>]+>/g, ''); box(x, 40, 590, w - 80, 46, 'rgba(0,0,0,0.75)', 14, INK, 3); text(x, s.length > 70 ? s.slice(0, 68) + '…' : s, w / 2, 614, 24); }
-      if (this.notice) text(x, this.notice.s, w / 2, 290, 70, '#ffd23f');
+      if (this.notice) text(x, this.notice.s, w / 2, 290, Math.max(30, Math.min(70, Math.floor((w - 40) / (this.notice.s.length * 0.56)))), '#ffd23f');   // long notices shrink to fit
       if (st.prompt && !st.rob) { box(x, w / 2 - 260, 470, 520, 70, 'rgba(29,20,66,0.8)', 20, INK, 5); text(x, st.prompt, w / 2, 506, 34); }
       if (st.rob) {
         box(x, w / 2 - 300, 450, 600, 120, 'rgba(29,20,66,0.85)', 22, INK, 6); text(x, st.rob.text, w / 2, 490, 34, '#ffd23f');

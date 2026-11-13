@@ -9,6 +9,11 @@ import { PrisonManager } from './prison.js';
 import { GoldenSniper } from './golden.js';
 import { onShopBuy, soakArmor } from './shops.js';
 import { Saves } from './profiles.js';
+import { addReport } from './bugs.js';
+import { CityBank } from './bank.js';
+import { Jobs } from './jobs.js';
+import { BANK } from '../public/shared/economy.js';
+import { lockCos } from '../public/shared/levels.js';
 import { inPrisonArea } from '../public/shared/prison.js';
 import { WEAPONS, WEAPON_IDS, MAX_SLOTS, DEFAULT_WEAPON, falloff, publicWeapon } from '../public/shared/weapons.js';
 import {
@@ -18,7 +23,8 @@ import {
 
 const MAP = buildMap();
 // each room gets its own collision world so prison doors can open in one room and stay shut in another
-const roomWorld = () => new CollisionWorld(MAP.boxes.concat(MAP.prison.boxes.map(b => b.door ? { ...b, min: [...b.min], max: [...b.max] } : b)));
+const roomWorld = () => new CollisionWorld(MAP.boxes.map(b => b.vaultDoor ? { ...b, min: [...b.min], max: [...b.max] } : b).concat(   // (each room has its own bank vault door)
+  MAP.prison.boxes.map(b => b.door ? { ...b, min: [...b.min], max: [...b.max] } : b)));
 const HISTORY = 40;                // pose history samples kept for lag compensation (~2s at 20Hz)
 const MAX_REWIND = 0.35;           // seconds
 const SPAWN_PROTECT = 1.5;
@@ -44,7 +50,9 @@ export class Room {
     this.code = code;
     this.server = server;
     this.isPublic = !!opts.isPublic;
-    this.crooksOn = opts.crooks !== false && process.env.CROOKS !== 'off';   // NPC robbers + car thieves (env CROOKS=off turns them off)
+    this.crooksOn = opts.crooks !== false && process.env.CROOKS !== 'off' && (process.env.CC_TEST !== '1' || process.env.CROOKS === 'on');   // (automated test servers only get robbers on request)   // NPC robbers + car thieves (env CROOKS=off turns them off)
+    this.missionsOn = opts.missions !== false && opts.progress !== false;   // tests turn these off so cash checks stay exact
+    this.xpOn = opts.progress !== false;
     this.crimes = opts.crimes !== false;   // player-vs-player crimes (attacking players, destruction). Tests that need a pure deathmatch turn it off.
     this.mode = MODES[opts.mode] ? opts.mode : 'ffa';
     this.killLimit = clamp(Number(opts.killLimit) || MODES[this.mode].killLimit, 5, 200);
@@ -63,6 +71,8 @@ export class Room {
     this.prison = new PrisonManager(this, MAP, this.world);
     this.gold = new GoldenSniper(this, MAP);
     this.saves = new Saves(this);   // saved progress (cash + lifetime stats)
+    this.bank = new CityBank(this, MAP);   // savings accounts + the vault heist
+    this.jobs = new Jobs(this, MAP);       // delivery + taxi jobs
     this.npcAcc = 0; this.snapCount = 0;
   }
   now() { return now(); }
@@ -90,6 +100,7 @@ export class Room {
     this.spawn(p);
     this.sendTo(p, { type: 'joined', ...this.fullState(p) });
     this.saves.hello(p);
+    this.sendTo(p, this.bank.stateMsg());
     this.broadcast({ type: 'playerJoined', p: this.publicPlayer(p) }, id);
     return p;
   }
@@ -111,6 +122,7 @@ export class Room {
   removePlayer(id) {
     const p = this.players.get(id);
     if (!p) return;
+    if (p.job) this.jobs.end(p, 'quit', true);
     this.saves.save(p, true);   // last save before leaving (if still connected)
     this.vehicles.playerGone(p);
     this.prison.playerGone(p);
@@ -133,7 +145,7 @@ export class Room {
   publicPlayer(p) {
     return { id: p.id, name: p.name, cos: p.cos, team: p.team, hp: p.hp, alive: p.alive, kills: p.kills,
              deaths: p.deaths, connected: p.connected, vr: p.vr, host: p.id === this.hostId, cash: p.cash || 0, wanted: p.wanted || 0, role: p.role || 'civilian',
-             jail: p.jail ? (p.jail.state === 'cut' ? 1 : p.jail.disguise ? 3 : 2) : 0 };
+             jail: p.jail ? (p.jail.state === 'cut' ? 1 : p.jail.disguise ? 3 : 2) : 0, lvl: p.lvl || 1 };
   }
 
   fullState(p) {
@@ -168,7 +180,7 @@ export class Room {
       case 'switch': return this.onSwitch(p, msg);
       case 'pickup': return this.onPickup(p, msg);
       case 'cosmetics':
-        p.cos = sanitizeCos(msg.cos); if (msg.name) p.name = sanitizeName(msg.name);
+        p.cos = lockCos(sanitizeCos(msg.cos), p.lvl || 1); if (msg.name) p.name = sanitizeName(msg.name);
         return this.broadcast({ type: 'playerUpdate', p: this.publicPlayer(p) });
       case 'settings': return this.onSettings(p, msg);
       case 'rob': return this.npcs.onRob(p, Math.floor(Number(msg.id)));
@@ -189,6 +201,20 @@ export class Room {
         return;
       case 'testTp': // automated browser tests only (server started with CC_TEST=1)
         if (process.env.CC_TEST === '1' && Array.isArray(msg.p)) { this.teleport(p, msg.p.map(Number), Number(msg.yaw) || 0); p.cash = Number(msg.cash) || p.cash; this.broadcast({ type: 'playerUpdate', p: this.publicPlayer(p) }); }
+        return;
+      case 'testMission': // automated browser tests only: count a mission event
+        if (process.env.CC_TEST === '1') this.saves.event(p, String(msg.ev), Math.max(0, Number(msg.n)));
+        return;
+      case 'heist': return msg.a === 'grab' ? this.bank.onGrab(p, msg.i) : this.bank.onDrill(p);
+      case 'bugReport': if (addReport('bug', p, this, msg)) this.sendTo(p, { type: 'bugThanks' }); return;
+      case 'clientError': addReport('error', p, this, msg); return;
+      case 'tutorial': return this.saves.tutorial(p, msg.a === 'done' ? 'done' : 'skip');
+      case 'jobQuit': if (p.job) this.jobs.end(p, 'quit'); return;
+      case 'testNoCops': // automated browser tests only: no NPC police in this room
+        if (process.env.CC_TEST === '1') { this.npcs.noCops = true; for (const n of this.npcs.list) if (n.type === 2) n.remove = true; for (const c of this.vehicles.cars) if (c.temp) c.remove = true; }
+        return;
+      case 'testXp': // automated browser tests only: give XP
+        if (process.env.CC_TEST === '1') this.saves.addXP(p, Math.max(0, Number(msg.amt) || 0), 'kill');
         return;
       case 'testCrook': // automated browser tests only: start an NPC robbery / car theft right now
         if (process.env.CC_TEST === '1') { const C = this.npcs.crooks; C.nextAt = Infinity; const n = msg.job === 'car' ? C.startCarTheft(this.now()) : C.startRobbery(this.now(), msg.shop || null); if (n && msg.noCops) n.noCops = true; this.sendTo(p, { type: 'testCrook', id: n ? n.id : 0, car: n && n.carTarget }); }
@@ -473,6 +499,15 @@ export class Room {
     }
     if (this.crimes && !silent && killer && killer !== victim && killer.role !== 'cop' && !killer.jail && !MODES[this.mode].teams && !victim.wanted && victim.role !== 'cop' && killer.pose && this.npcs.witnessed(killer.pose.h[0], killer.pose.h[2])) this.npcs.addWanted(killer, 1, 'murder');
     if (victim.wanted) this.npcs.clearWanted(victim);
+    // the killer grabs some of the cash you carry (money in the CITY BANK is safe)
+    if (!silent && killer && killer !== victim && w !== 'arrest' && (victim.cash || 0) > 0) {
+      const took = Math.min(BANK.deathLossMax, Math.floor(victim.cash * BANK.deathLoss));
+      if (took > 0) {
+        victim.cash -= took; killer.cash = (killer.cash || 0) + took;
+        this.sendTo(victim, { type: 'cashLost', amt: took, by: killer.id, why: 'ko' });
+        this.sendTo(killer, { type: 'cashGot', amt: took, from: victim.id });
+      }
+    }
     if (!silent && killer && killer !== victim) {
       killer.kills++; this.saves.stat(killer, 'kills');
       if (head) { killer.headshots++; this.saves.stat(killer, 'headshots'); }
@@ -627,6 +662,8 @@ export class Room {
     this.finishReloads(t);
     this.gold.tick();
     this.saves.tick(dt);
+    this.bank.tick(dt);
+    this.jobTick = (this.jobTick || 0) + dt; if (this.jobTick > 0.25) { this.jobTick = 0; this.jobs.tick(); }
     this.npcAcc += dt;
     if (this.npcAcc >= 0.1) { const d = Math.min(0.25, this.npcAcc); this.npcs.tick(d); this.vehicles.tick(d); this.prison.tick(d); this.npcAcc = 0; }
     // rockets

@@ -48,7 +48,10 @@
 
     <div id="screen-profile" class="screen panel hidden">
       <h2>📊 MY PROGRESS</h2>
-      <p class="pf-cash">💰 <b id="pf-cash">$0</b> <small>saved cash</small></p>
+      <p class="pf-cash">💰 <b id="pf-cash">$0</b> <small>cash</small> &nbsp; 🏦 <b id="pf-bank">$0</b> <small>in the CITY BANK</small></p>
+      <div class="pf-level"><b id="pf-lvl">Level 1</b><div class="xpbar"><div id="pf-xpfill"></div></div><small id="pf-xp">0 / 100 XP</small></div>
+      <p id="pf-next" class="pf-note"></p>
+      <div id="pf-missions" class="pf-missions"></div>
       <div id="pf-stats" class="pf-stats"></div>
       <p class="pf-note">Your cash and stats save automatically on this device and browser while you play.
         If you clear your browser data your progress starts over.</p>
@@ -177,7 +180,7 @@
             <li><b>Climb:</b> slap walls and pull yourself up. Push off walls to wall-jump onto rooftops.</li>
             <li><b>Grip (either hand):</b> grab a weapon or pickup near your hand.</li>
             <li><b>Right trigger:</b> shoot. <b>A:</b> reload. <b>B:</b> switch weapon.</li>
-            <li><b>X:</b> jump boost. <b>Y:</b> menu. <b>Left stick click:</b> scoreboard.</li>
+            <li><b>X:</b> jump boost. <b>Y:</b> menu (daily missions, skip tutorial, 🐞 report a bug). <b>Left stick click:</b> scoreboard.</li>
             <li><b>Right stick:</b> turn. <b>Left stick:</b> walk (if enabled in Settings).</li>
           </ul>
         </div>
@@ -188,7 +191,8 @@
             <li><b>Left click</b> shoot, <b>R</b> reload, <b>E</b> pick up</li>
             <li><b>Space</b> jump (hold it against a ledge to climb up)</li>
             <li><b>1 2 3 / wheel / Q</b> switch weapon</li>
-            <li><b>Tab</b> scoreboard, <b>Esc</b> pause menu</li>
+            <li><b>Tab</b> scoreboard + daily missions, <b>Esc</b> pause menu (🐞 report a bug there)</li>
+            <li><b>K</b> skip the tutorial</li>
             <li>Walk into a <b>ladder</b> to climb it.</li>
           </ul>
           <h3>👮 Cop or 🧑 Civilian</h3>
@@ -201,12 +205,15 @@
           <ul>
             <li>Everyone has 100 health. Headshots hurt a lot more.</li>
             <li>Your cash and stats save automatically (see 📊 MY PROGRESS). New players start with $200.</li>
+            <li>You earn XP for takedowns, arrests, robberies, stopping robbers and finishing matches. Level up for cash and new cosmetics.</li>
+            <li>Every day there are 3 new <b>daily missions</b> for cash and XP (hold <b>Tab</b> to see them, VR: Y menu).</li>
+            <li>Keep your cash safe in the <b>CITY BANK</b> (downtown plaza): it earns interest. Get a job at the <b>💼 JOBS</b> kiosk next to it. Or crack the bank vault...</li>
             <li>Eliminated players respawn after 5 seconds.</li>
             <li>Pistols hide in shops, shotguns at the police station, snipers on rooftops, rockets in red crates.</li>
           </ul>
         </div>
       </div>
-      <div class="btns"><button class="big b-green" data-goto="main">✔ GOT IT</button></div>
+      <div class="btns row"><button class="b-blue" data-action="tutorial">🎓 PLAY THE TUTORIAL</button><button class="big b-green" data-goto="main">✔ GOT IT</button></div>
     </div>
   </div>
 
@@ -222,6 +229,12 @@
     <div id="subtitle" class="hidden"></div>
     <div id="robbar" class="hidden"><div id="robtext">ROBBING...</div><div class="rb"><div id="robfill"></div></div></div>
     <div id="killfeed"></div>
+    <div id="lvlbox"><b id="lvlnum">1</b><div class="xpbar"><div id="xpfill"></div></div></div>
+    <div id="xppop"></div>
+    <div id="missions" class="hidden"></div>
+    <div id="jobline" class="hidden"></div>
+    <div id="tutorial" class="hidden"></div>
+    <div id="levelup" class="hidden"></div>
     <div id="healthbox"><div class="hlabel">❤</div><div class="hbar"><div id="hfill"></div></div><div id="htext">100</div><div id="armorbox"></div><div id="boostbox"></div></div>
     <div id="ammobox"><div id="wname">Pistol</div><div id="ammo"><b id="mag">12</b> / <span id="reserve">48</span></div><div id="reloadbar"><div></div></div></div>
     <div id="slots"></div>
@@ -246,7 +259,14 @@
         <button class="b-blue" data-action="copy">📋 COPY INVITE LINK</button>
         <button class="b-purple" data-action="pause-settings">⚙ SETTINGS</button>
         <button class="b-pink" data-action="pause-custom">🎨 CUSTOMIZE</button>
+        <button class="b-yellow" data-action="bug">🐞 REPORT A BUG</button>
         <button class="b-gray" data-action="leave">🚪 LEAVE ROOM</button>
+      </div>
+      <div id="bugbox" class="hidden">
+        <p class="small">What went wrong? Where were you and what were you doing? (Your position and game info are sent too.)</p>
+        <textarea id="bugtext" maxlength="1000" rows="4" placeholder="Example: I got stuck in the wall next to the GUN SHOP after climbing the roof"></textarea>
+        <div class="btns"><button class="b-green" data-action="bugsend">📨 SEND</button><button class="b-gray" data-action="bugcancel">CANCEL</button></div>
+        <p id="bugmsg" class="small"></p>
       </div>
     </div>
   </div>

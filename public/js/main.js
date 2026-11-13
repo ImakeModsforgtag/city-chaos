@@ -17,8 +17,15 @@ import { Pickups } from './weapons/pickups.js';
 import { WeaponSystem } from './weapons/weaponSystem.js';
 import { GoldenSniper, ESP_LAYER } from './weapons/golden.js';
 import { Boosts } from './player/boosts.js';
+import { BankView } from './world/bank.js';
+import { Marker } from './world/marker.js';
+import { Tutorial } from './ui/tutorial.js';
+import { BANK, JOBS } from '/shared/economy.js';
 import { ShopMenu } from './ui/shopMenu.js';
 import { peekToken, STAT_KEYS, STAT_NAMES, START_CASH, fmtTime } from '/shared/profile.js';
+import { levelFromXp, levelProgress, lockCos, UNLOCKS, unlockLevel, MAX_LEVEL } from '/shared/levels.js';
+import { HATS, GLASSES, BACKS, HEADS, BODIES } from '/shared/constants.js';
+import { missionsFor, dayKey, fmtReset, secondsToReset, ALL_DONE_BONUS } from '/shared/missions.js';
 import { Walker, VRMover } from './physics/movement.js';
 import { VRInput } from './vr/vrInput.js';
 import { VRUI } from './vr/vrUI.js';
@@ -54,7 +61,7 @@ loadStep(70, 'Loading weapons...');
 if (!profile.name) { profile.name = 'Player' + Math.floor(1000 + Math.random() * 9000); saveProfile(); }
 
 const net = new Network();
-net.hello = () => ({ name: profile.name, cos: profile.cos, role: profile.role });
+net.hello = () => ({ name: profile.name, cos: myCos(), role: profile.role });
 const myRole = () => (G.room && G.players.get(G.room.you)?.role) || profile.role || 'civilian';
 const isCop = () => myRole() === 'cop';
 const remote = new RemotePlayers(scene, effects);
@@ -84,22 +91,186 @@ const vrMover = new VRMover(world, allLadders);
 // store boosts (energy drinks etc.) for walking and VR movement
 const boosts = new Boosts({ walker, vrMover, toast: (t) => toast(t) });   // store speed / jump boosts
 net.on('save', (m) => saveSet(m.token));
+// ---------------------------------------------------------------- bug reports + automatic error reports
+const GAME_VERSION = '2026.11.12';
+function gameInfo() { return { fps: G.fps || 0, ua: navigator.userAgent, view: G.view, version: GAME_VERSION }; }
+function sendBug(text) {
+  if (!G.room) { toast('Join a game first, then report the bug from the pause menu'); return; }
+  const ctx = [G.prompt && `prompt: ${G.prompt}`, G.job && `job: ${G.job.kind} ${G.job.phase}`, G.heist && 'carrying vault cash', driving.active && 'driving', prison.prisoner && 'in prison'].filter(Boolean).join(' · ');
+  net.send({ type: 'bugReport', text: text + (ctx ? `  [${ctx}]` : ''), info: gameInfo() });
+}
+net.on('bugThanks', () => { toast('🐞 Thanks! Your bug report was sent'); const el = document.getElementById('bugmsg'); if (el) el.textContent = '✅ Sent, thank you!'; setTimeout(() => document.getElementById('bugbox')?.classList.add('hidden'), 1500); vrui.setNotice('Bug report sent, thanks!', 2); });
+// JavaScript errors are reported automatically (max a few per session) so they show up in the server log
+const errQueue = [];
+function reportError(msg, src, line, stack) {
+  if (errQueue.length + (G.errSent || 0) >= 8) return;
+  const m = { type: 'clientError', msg: String(msg).slice(0, 400), src: String(src || '').slice(0, 160), line: line | 0, stack: String(stack || '').slice(0, 900), info: gameInfo() };
+  if (G.room && net.connected) { net.send(m); G.errSent = (G.errSent || 0) + 1; } else errQueue.push(m);
+}
+window.addEventListener('error', (e) => reportError(e.message, e.filename, e.lineno, e.error && e.error.stack));
+window.addEventListener('unhandledrejection', (e) => reportError('unhandled promise: ' + (e.reason && e.reason.message || e.reason), '', 0, e.reason && e.reason.stack));
+setInterval(() => { while (errQueue.length && G.room && net.connected) { net.send(errQueue.shift()); G.errSent = (G.errSent || 0) + 1; } }, 3000);
+// XP + levels
+net.on('xp', (m) => {
+  const was = myLevel();
+  G.myXp = m.xp;
+  const p = G.players.get(G.room?.you); if (p) { p.lvl = m.lvl; if (m.cash !== undefined) p.cash = m.cash; }
+  hud.xpPop(`+${m.gain} XP${m.reason ? ' · ' + m.reason : ''}`);
+  if (m.up) {
+    const un = m.unlocks && m.unlocks.length ? `<small>🔓 Unlocked: ${m.unlocks.join(', ')}</small>` : '';
+    hud.levelUp(`<div class="big">LEVEL ${m.lvl}!</div><small>+$${m.bonus} level-up bonus</small>${un}`);
+    vrui.setNotice(`LEVEL ${m.lvl}! +$${m.bonus}${m.unlocks && m.unlocks.length ? ' · Unlocked ' + m.unlocks.join(', ') : ''}`, 3.5);
+    audio.playWin(); vrInput.pulse('left', 0.8, 200); vrInput.pulse('right', 0.8, 200);
+    if (was !== m.lvl) { localAvatar.setCosmetics(myCos()); rebuildLocalHands(); if (G.room) net.send({ type: 'cosmetics', cos: myCos(), name: profile.name }); }
+  } else if (renderer.xr.isPresenting) vrui.setNotice(`+${m.gain} XP${m.reason ? ' · ' + m.reason : ''}`, 1.2);
+});
+// daily missions
+// the VR menu page with today's missions
+function missionsVrModel() {
+  const ms = G.missions;
+  const items = ms ? ms.list.map(q => ({ label: `${q.done ? '✔ ' : ''}${q.text}  ${q.done ? 'DONE' : q.prog + '/' + q.goal}`, act: 'missions:none', color: q.done ? '#1b8a4e' : '#3d3a6b' })) : [];
+  if (ms) items.push({ label: ms.bonus ? '🏆 ALL DONE! BONUS COLLECTED' : `ALL 3 BONUS: +$${ms.bonusCash} · +${ms.bonusXp} XP`, act: 'missions:none', color: '#8338ec' });
+  items.push({ label: '◀ BACK', act: 'missions:back', color: '#6c6f8a' });
+  const left = ms ? Math.max(0, (ms.resetAt - performance.now()) / 1000) : 0;
+  return { cols: 1, title: '📋 DAILY MISSIONS', sub: ms ? `NEW MISSIONS IN ${fmtReset(left).toUpperCase()}` : '', items };
+}
+function missionsHtml(ms, title = true) {
+  if (!ms) return '';
+  const rows = ms.list.map(m => `<div class="ms ${m.done ? 'done' : ''}"><div class="t"><span>${esc(m.text)}</span><b>${m.done ? '' : `${m.prog}/${m.goal}`}</b></div>`
+    + `${m.done ? '' : `<div class="bar"><div style="width:${Math.round(100 * m.prog / m.goal)}%"></div></div>`}<small>+$${m.cash} · +${m.xp} XP</small></div>`).join('');
+  const left = ms.resetAt ? Math.max(0, (ms.resetAt - performance.now()) / 1000) : ms.resetIn;
+  return (title ? `<h4>📋 DAILY MISSIONS <small>· new in ${fmtReset(left)}</small></h4>` : '') + rows
+    + `<div class="ms"><small>${ms.bonus ? '🏆 All done! Bonus collected' : `Finish all 3: bonus +$${ms.bonusCash} · +${ms.bonusXp} XP`}</small></div>`;
+}
+net.on('missions', (m) => {
+  const old = G.missions;
+  G.missions = { ...m, resetAt: performance.now() + m.resetIn * 1000 };
+  G.missionsShowUntil = performance.now() + (old ? 7000 : 10000);
+  if (m.just) {
+    for (const i of m.just) {
+      const q = m.list[i];
+      hud.levelUp(`<div class="big">MISSION COMPLETE!</div><small>${esc(q.text)}</small><small>+$${q.cash} · +${q.xp} XP</small>`, 3200);
+      vrui.setNotice(`MISSION COMPLETE! ${q.text} +$${q.cash}`, 3);
+    }
+    if (m.allDone) { hud.levelUp(`<div class="big">ALL DAILY MISSIONS!</div><small>Bonus +$${m.bonusCash} · +${m.bonusXp} XP · new ones in ${fmtReset(m.resetIn)}</small>`, 4000); setTimeout(() => vrui.setNotice(`ALL 3 DAILY MISSIONS! +$${m.bonusCash}`, 3.5), 3000); }
+    audio.playChime(); vrInput.pulse('right', 0.6, 150);
+    const p = G.players.get(G.room?.you); if (p && m.cash !== undefined) p.cash = m.cash;
+  } else if (old && m.fresh) toast('📋 New daily missions are here!');
+  else if (old) {   // progress tick: a short VR note for the mission that moved
+    const i = m.list.findIndex((q, k) => old.list[k] && q.prog !== old.list[k].prog && !q.done);
+    if (i >= 0 && renderer.xr.isPresenting) vrui.setNotice(`📋 ${m.list[i].text}: ${m.list[i].prog}/${m.list[i].goal}`, 1.6);
+  }
+});
+net.on('levelUp', (m) => {
+  const p = G.players.get(m.id); if (p) p.lvl = m.lvl;
+  if (m.id !== G.room?.you) { const t = `⭐ ${nameOf(m.id)} reached level ${m.lvl}`; hud.feed(esc(t)); vrui.addFeed(t); }
+});
 net.on('profile', (m) => {
   if (m.reset) toast('⚠️ Your saved progress couldn\'t be read, starting fresh');
   else if (!m.loaded) toast(`👋 Welcome to CITY CHAOS! Here's $${m.cash} to get you started`);
-  else toast(`💾 Progress loaded: $${m.cash}`);
+  else toast(`💾 Progress loaded: $${m.cash} · level ${m.lvl}${m.bank ? ` · 🏦 $${m.bank} saved` : ''}`);
+  G.myXp = m.xp; G.bank = m.bank || 0;
+  if (m.interest) setTimeout(() => toast(`🏦 Your savings earned $${m.interest} interest while you were away`), 2500);
+  // brand new players (or players who never saw it and are still low level) get the tutorial once they're in the city
+  if (!m.tut && !tutSeen() && (!m.loaded || (m.xp || 0) < 200)) G.tutPending = true;
 });
 // store menus (walk up to a shopkeeper: PC E · VR grip)
+const bankView = new BankView(scene, map, world);   // CITY BANK vault door + cash stacks
+const marker = new Marker(scene);                  // job target beam
+const tut = new Tutorial({ net, hud, vrui, map, toast: (t) => toast(t) });   // first-time tutorial
+const tutSeen = () => { try { return localStorage.getItem('cc_tut') === '1'; } catch { return false; } };
+net.on('tutReward', (m) => { hud.levelUp(`<div class="big">TUTORIAL COMPLETE!</div><small>+$${m.cash} · +${m.xp} XP</small>`, 3500); vrui.setNotice(`TUTORIAL COMPLETE! +$${m.cash}`, 3); audio.playCash(); const p = G.players.get(G.room?.you); if (p) p.cash = m.total; });
 const shopMenu = new ShopMenu({ net, map, world, npcs, toast: (t) => toast(t), hud, vrui, audio, myCash: () => G.players.get(G.room?.you)?.cash || 0, goldForSale: () => !!goldForSale(),
+  myBank: () => G.bank || 0, myJob: () => G.job ? `${JOBS[G.job.kind].icon} ${JOBS[G.job.kind].name}` : '',
   relock: () => { if (G.view === 'playing' && !renderer.xr.isPresenting) desk.lock && desk.lock(); } });
 net.on('shopResult', (m) => {
   const p = G.players.get(G.room?.you); if (p && m.cash !== undefined) p.cash = m.cash;
   if (m.ok && m.kind === 'boost') boosts.setBoost(m.boost);
   if (m.ok && m.kind === 'armor') G.me.armor = m.ap;
+  if (m.ok && m.bank !== undefined) G.bank = m.bank;
+  if (m.ok && m.kind === 'job' && vrui.menuOpen) vrui.closeMenu();   // job taken: off you go
   if (m.ok) vrInput.pulse('right', 0.5, 60);
   shopMenu.onResult(m);
 });
 net.on('armor', (m) => { G.me.armor = m.ap; });
+// ---------------------------------------------------------------- CITY BANK + heist + jobs
+net.on('bankBal', (m) => { G.bank = m.bank; if (m.interest) toast(`🏦 Your savings earned $${m.interest} interest`); });
+net.on('bank', (m) => {
+  bankView.onState(m);
+  if (m.you === 'cop') G.prompt = '👮 Cops guard the vault, they don\'t crack it';
+  if (m.state === 'drilling' && G.drilling) G.rob = { text: '🔩 DRILLING THE VAULT... KEEP HOLDING', p: m.p, at: performance.now() / 1000 };
+  if (m.ev === 'open') { const t = m.by === G.room?.you ? '💥 YOU CRACKED THE VAULT! Grab a cash stack!' : `🚨 ${nameOf(m.by)} cracked the CITY BANK vault!`; hud.feed(esc(t), m.by === G.room?.you); vrui.addFeed(t); audio.playAlarm(); }
+  if (m.ev === 'close') { hud.feed('🔒 The bank vault slammed shut (lockdown)'); vrui.addFeed('🔒 The bank vault slammed shut'); }
+});
+net.on('bankAlarm', (m) => { const t = `🚨 ALARM! ${nameOf(m.by)} is drilling the CITY BANK vault!`; hud.feed(esc(t), m.by === G.room?.you); vrui.addFeed(t); audio.playAlarm(); });
+net.on('heist', (m) => {
+  if (m.loot) { G.heist = { loot: m.loot, from: m.from, r: m.escape }; hud.notice(`💰 $${m.loot}! GET ${m.escape} M AWAY FROM THE BANK!`, 3000); vrui.setNotice(`$${m.loot}! Get ${m.escape} m away from the bank!`, 3); audio.playCash(); return; }
+  G.heist = null;
+  if (m.paid) { hud.levelUp(`<div class="big">HEIST COMPLETE!</div><small>You got away with $${m.paid}</small>`, 3800); vrui.setNotice(`HEIST COMPLETE! +$${m.paid}`, 3.5); audio.playWin(); const p = G.players.get(G.room?.you); if (p) p.cash = m.cash; }
+  if (m.lost) { hud.notice('💸 You lost the stolen cash', 2500); vrui.setNotice('You lost the stolen cash', 2.5); }
+});
+net.on('heistEnd', (m) => { if (m.id === G.room?.you) return; const t = m.ok ? `💰 ${nameOf(m.id)} got away with $${m.cash} from the bank!` : `👮 ${nameOf(m.id)} lost the bank cash`; hud.feed(esc(t)); vrui.addFeed(t); });
+net.on('cashLost', (m) => { const t = m.why === 'arrest' ? `🚔 Police confiscated $${m.amt} (keep cash in the CITY BANK)` : `💸 ${nameOf(m.by)} grabbed $${m.amt} from you (cash in the CITY BANK is safe)`; toast(t); vrui.setNotice(t, 3); });
+net.on('cashGot', (m) => { hud.notice(`💵 +$${m.amt} grabbed from ${nameOf(m.from)}`, 1800); });
+net.on('job', (m) => {
+  if (!m.kind) {
+    const was = G.job; G.job = null; marker.hide();
+    if (m.result === 'paid' || m.result === 'late') {
+      const J = JOBS[m.was] || {};
+      hud.levelUp(`<div class="big">${m.result === 'late' ? 'LATE BUT DONE' : 'JOB DONE!'}</div><small>${J.icon || ''} ${J.name || 'Job'} · +$${m.paid}${m.result === 'late' ? ' (half pay)' : ''}</small><small>Go back to the 💼 JOBS kiosk for another one</small>`, 3500);
+      vrui.setNotice(`JOB DONE! +$${m.paid}`, 3); audio.playCash();
+      const p = G.players.get(G.room?.you); if (p && m.cash !== undefined) p.cash = m.cash;
+    } else if (was && m.result) {
+      const why = { quit: 'You quit the job', timeout: 'Too slow, the customer cancelled', failed: 'The job fell through', passenger: 'Your passenger got out and left', hurt: 'Your passenger got hurt' }[m.result] || 'Job over';
+      toast('💼 ' + why); vrui.setNotice(why, 2.5);
+    }
+    return;
+  }
+  G.job = { ...m, endsAt: m.left ? performance.now() + m.left * 1000 : 0 };
+  if (m.started) { toast(`${JOBS[m.kind].icon} ${m.text}`); vrui.setNotice(m.text, 3); }
+  if (m.picked) { hud.notice(m.kind === 'taxi' ? '🚕 Passenger on board!' : '📦 Order picked up!', 1500); audio.playPickup(); vrui.setNotice(m.text, 3); }
+});
+// the vault: drill (hold) / grab (press) prompts. Returns the prompt text, or null when not at the vault
+function vaultInteract(p, hold, press, vr, t) {
+  const B = map.bank; if (!B || !G.me.alive) return null;
+  const k = vr ? 'grip' : 'E', K = vr ? 'Squeeze grip' : 'Press E';
+  const st = bankView.state;
+  const i = st === 'open' ? bankView.nearStack(p) : -1;
+  if (i >= 0) {
+    if (isCop()) return '👮 Guard the vault: arrest anyone who grabs the cash';
+    if (G.heist) return '💰 You can only carry one stack: RUN!';
+    if (press) net.send({ type: 'heist', a: 'grab', i });
+    return `💰 ${K} to grab the cash`;
+  }
+  if (!bankView.nearDrill(p)) { G.drilling = false; return null; }
+  if (isCop()) return '👮 Cops guard the vault, they don\'t crack it';
+  if (st === 'lockdown') { const s = bankView.lockLeft(); return `🔒 Vault on lockdown for ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+  if (st === 'open') return `🚨 The vault is OPEN for ${bankView.openLeftS()}s: grab the cash inside!`;
+  G.drilling = !!hold;
+  if (hold && t - (G.drillSentAt || 0) > 0.25) { G.drillSentAt = t; net.send({ type: 'heist', a: 'drill' }); if (vr) vrInput.pulse('right', 0.25, 30); if (Math.random() < 0.3) audio.playScrape(); }
+  return st === 'drilling' && !hold ? `🔩 Keep holding ${k} to finish drilling!` : `🔩 Hold ${k} to drill the vault (sets off the alarm ★)`;
+}
+// one line at the top while you're on a job or getting away with bank cash
+function taskLine(cam, short = false) {
+  const me = cam.getWorldPosition(new THREE.Vector3());
+  const arrow = (x, z) => {
+    const d = Math.hypot(x - me.x, z - me.z), dir = new THREE.Vector3(); cam.getWorldDirection(dir);
+    const a = Math.atan2(x - me.x, z - me.z) - Math.atan2(dir.x, dir.z);
+    const arrows = ['⬆', '↗', '➡', '↘', '⬇', '↙', '⬅', '↖'];
+    const idx = ((Math.round(-a / (Math.PI / 4)) % 8) + 8) % 8;
+    return `${arrows[idx]} ${Math.round(d)} m`;
+  };
+  if (G.heist) {
+    const d = Math.hypot(me.x - G.heist.from[0], me.z - G.heist.from[1]);
+    return `💰 $${G.heist.loot} stolen · get ${Math.max(0, Math.round(G.heist.r - d))} m further from the bank!`;
+  }
+  if (!G.job) return null;
+  const j = G.job, tgt = j.target;
+  const left = j.endsAt ? Math.round((j.endsAt - performance.now()) / 1000) : 0;
+  const tm = j.endsAt ? (left >= 0 ? ` · ⏱ ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : ' · ⏱ LATE (half pay)') : '';
+  if (short) return `${JOBS[j.kind].icon} ${j.text.replace('the order ', '').replace(' waiting on the sidewalk', '').replace(' (E / grip on any car), then go pick up your passenger', '')}${tgt ? ' · ' + arrow(tgt[0], tgt[2]) : ''}${tm}`;
+  return `${JOBS[j.kind].icon} ${j.text}${tgt ? ' · ' + arrow(tgt[0], tgt[2]) : ''}${tm}${j.pay ? ` · $${j.pay}` : ''}`;
+}
 const prison = new PrisonClient({ net, map, world, view: prisonView, npcs });
 const cut = new ArrestCutscene({ scene, camera, rig, map, world, prisonView });
 let pendingTp = null;
@@ -114,7 +285,7 @@ scene.add(handL); handL.visible = false;
 vrHolder.add(handR); handR.visible = false;
 
 function rebuildLocalHands() {
-  localAvatar.setCosmetics(profile.cos);
+  localAvatar.setCosmetics(myCos());
 }
 
 // ------------------------------------------------------------------ state
@@ -137,11 +308,35 @@ function saveGet() { try { return localStorage.getItem(SAVE_KEY) || null; } catc
 function saveSet(t) { try { if (t) localStorage.setItem(SAVE_KEY, t); else localStorage.removeItem(SAVE_KEY); } catch {} walletLine(); }
 function walletLine() {
   const p = peekToken(saveGet()), el = document.getElementById('wallet-line');
-  if (el) el.textContent = p ? `💰 $${p.cash} saved · ${p.stats.kills} takedowns · ${fmtTime(p.stats.playSec)} played` : `New player? You start with $${START_CASH}.`;
+  if (el) el.textContent = p ? `⭐ Level ${levelFromXp(p.xp)} · 💰 $${p.cash}${p.bank ? ` · 🏦 $${p.bank} saved` : ''} · ${fmtTime(p.stats.playSec)} played` : `New player? You start with $${START_CASH}.`;
+  menu.syncCustom && menu.syncCustom();
+}
+// your level (from the server while playing, from your save in the menus)
+function myXp() { return G.myXp !== undefined ? G.myXp : (peekToken(saveGet()) || { xp: 0 }).xp; }
+function myLevel() { return levelFromXp(myXp()); }
+function myCos() { return lockCos(profile.cos, myLevel()); }   // what others see: locked items show as the default
+const COS_NAMES = { hat: HATS, glasses: GLASSES, back: BACKS, head: HEADS, body: BODIES };
+function nextUnlocks(lvl) {
+  let best = null;
+  for (const key of Object.keys(UNLOCKS)) for (const [idx, l] of Object.entries(UNLOCKS[key])) if (l > lvl && (!best || l < best.lvl)) best = { lvl: l, names: [] };
+  if (!best) return null;
+  for (const key of Object.keys(UNLOCKS)) for (const [idx, l] of Object.entries(UNLOCKS[key])) if (l === best.lvl) best.names.push(COS_NAMES[key][idx]);
+  return best;
 }
 function showProgress() {
   const p = peekToken(saveGet());
   document.getElementById('pf-cash').textContent = '$' + (p ? p.cash : START_CASH);
+  document.getElementById('pf-bank').textContent = '$' + (p ? p.bank : 0);
+  const pr = levelProgress(p ? p.xp : 0);
+  document.getElementById('pf-lvl').textContent = `⭐ Level ${pr.lvl}`;
+  document.getElementById('pf-xpfill').style.width = Math.round(pr.frac * 100) + '%';
+  document.getElementById('pf-xp').textContent = pr.lvl >= MAX_LEVEL ? 'MAX LEVEL' : `${pr.into} / ${pr.need} XP to level ${pr.lvl + 1}`;
+  const next = nextUnlocks(pr.lvl);
+  document.getElementById('pf-next').textContent = next ? `Next unlock at level ${next.lvl}: ${next.names.join(', ')}` : 'You have unlocked every item!';
+  {
+    const day = dayKey(), list = missionsFor(day), d = p && p.daily && p.daily.day === day ? p.daily : { prog: [0, 0, 0], done: [0, 0, 0], bonus: 0 };
+    document.getElementById('pf-missions').innerHTML = missionsHtml({ list: list.map((m, i) => ({ ...m, prog: Math.min(m.goal, d.prog[i]), done: d.done[i] })), bonus: d.bonus, bonusCash: ALL_DONE_BONUS.cash, bonusXp: ALL_DONE_BONUS.xp, resetIn: secondsToReset() });
+  }
   document.getElementById('pf-stats').innerHTML = STAT_KEYS.map(k => {
     const v = p ? p.stats[k] : 0;
     return `<div><span>${STAT_NAMES[k]}</span><b>${k === 'playSec' ? fmtTime(v) : k === 'earned' || k === 'spent' ? '$' + v : v}</b></div>`;
@@ -149,10 +344,13 @@ function showProgress() {
 }
 setTimeout(walletLine, 0);
 const menu = new Menu({
-  onPlay: () => { if (!net.connected) return toast('Still connecting to the server...'); net.send({ type: 'quick', name: profile.name, cos: profile.cos, role: profile.role, profile: saveGet() }); toast('Finding a match...'); },
-  onJoin: (code) => { if (!net.connected) return menu.joinError('Not connected to the server yet.'); net.send({ type: 'join', code, name: profile.name, cos: profile.cos, role: profile.role, profile: saveGet() }); },
-  onCreate: (o) => { if (!net.connected) return toast('Still connecting to the server...'); net.send({ type: 'create', ...o, name: profile.name, cos: profile.cos, role: profile.role, profile: saveGet() }); },
+  onPlay: () => { if (!net.connected) return toast('Still connecting to the server...'); net.send({ type: 'quick', name: profile.name, cos: myCos(), role: profile.role, profile: saveGet() }); toast('Finding a match...'); },
+  onJoin: (code) => { if (!net.connected) return menu.joinError('Not connected to the server yet.'); net.send({ type: 'join', code, name: profile.name, cos: myCos(), role: profile.role, profile: saveGet() }); },
+  onCreate: (o) => { if (!net.connected) return toast('Still connecting to the server...'); net.send({ type: 'create', ...o, name: profile.name, cos: myCos(), role: profile.role, profile: saveGet() }); },
   onProgress: () => showProgress(),
+  onBug: (text) => sendBug(text),
+  onTutorial: () => { try { localStorage.removeItem('cc_tut'); } catch {} G.tutPending = true; tut.stop(); toast(G.room ? '🎓 The tutorial starts as soon as you\'re back in the city' : '🎓 The tutorial will start when you join a game'); },
+  level: () => myLevel(),
   onResetProgress: () => {
     const msg = document.getElementById('pf-msg');
     if (!G.resetArmed || performance.now() - G.resetArmed > 4000) { G.resetArmed = performance.now(); msg.textContent = 'Tap START OVER again to erase your saved cash and stats.'; return; }
@@ -168,7 +366,7 @@ const menu = new Menu({
   onMode: (m) => { if (G.room) net.send({ type: 'settings', mode: m, killLimit: MODES[m].killLimit, timeLimit: G.room.timeLimit }); },
   onResume: resumeDesktop,
   onPauseGo: (screen) => { $('pause').classList.add('hidden'); G.view = 'lobby'; hud.show(false); menu.show(true); menu.history = ['lobby']; menu.go(screen); },
-  onProfile: () => { rebuildLocalHands(); if (G.room) net.send({ type: 'cosmetics', cos: profile.cos, name: profile.name }); }
+  onProfile: () => { rebuildLocalHands(); if (G.room) net.send({ type: 'cosmetics', cos: myCos(), name: profile.name }); }
 });
 
 function copyInvite() {
@@ -248,7 +446,7 @@ function toggleMic() {
 
 function leaveRoom() {
   net.send({ type: 'leave' });
-  shopMenu.close(); cleanupRoom();
+  shopMenu.close(); G.job = null; G.heist = null; marker.hide(); tut.stop(); cleanupRoom();
 }
 function cleanupRoom() {
   G.gold = null; if (G.bcam) endBulletCam(); gold.skip();
@@ -264,7 +462,7 @@ function cleanupRoom() {
 // ------------------------------------------------------------------ helpers
 function nameOf(id) { if (id == null) return null; const p = G.players.get(id); return p ? p.name : '???'; }
 function boardModel() {
-  const rows = [...G.players.values()].map(p => ({ name: p.name, color: p.cos.color, kills: p.kills || 0, deaths: p.deaths || 0, team: p.team, me: p.id === G.room.you, connected: p.connected, host: p.id === G.room.hostId, vr: p.vr, cash: p.cash || 0, wanted: p.wanted || 0 }))
+  const rows = [...G.players.values()].map(p => ({ name: p.name, color: p.cos.color, kills: p.kills || 0, deaths: p.deaths || 0, team: p.team, me: p.id === G.room.you, connected: p.connected, host: p.id === G.room.hostId, vr: p.vr, cash: p.cash || 0, wanted: p.wanted || 0, lvl: p.lvl || 1 }))
     .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
   return { players: rows, teams: MODES[G.room.mode].teams, teamScores: G.room.teamScores, killLimit: G.room.killLimit, mode: G.room.mode };
 }
@@ -275,6 +473,7 @@ function refreshLobby() { if (G.room) menu.renderLobby(lobbyModel()); }
 const fmt = (s) => { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 function headWorld(out = new THREE.Vector3()) { return camera.getWorldPosition(out); }
+function tutPos(xr) { if (!xr) return walker.feet.clone(); const h = headWorld(new THREE.Vector3()); return new THREE.Vector3(h.x, rig.position.y, h.z); }
 
 function teleport(p, yaw) {
   if (renderer.xr.isPresenting) {
@@ -437,7 +636,7 @@ net.on('respawn', (m) => {
   if (m.id !== G.room?.you) return;
   if (driving.active) driving.exit();
   G.me.alive = true; G.me.hp = m.hp; G.me.life = m.life; G.death = null;
-  G.me.armor = 0; boosts.setBoost(null); shopMenu.close();
+  G.me.armor = 0; boosts.setBoost(null); shopMenu.close(); G.heist = null;
   teleport(new THREE.Vector3(...m.p), m.yaw);
   audio.playSpawn();
 });
@@ -568,7 +767,7 @@ net.on('arrestCut', (m) => {
   prison.me = { state: 'cut', cell: m.cell, items: [], pflags: [], baskets: 0 };
   G.arrestBar = null; G.prompt = null; vrui.notice = null; vrui.feed = [];
   const xr = renderer.xr.isPresenting;
-  cut.start(m, { xr, cos: { ...profile.cos }, name: profile.name, skipLabel: xr ? 'Press B to skip' : 'SPACE to skip' });
+  cut.start(m, { xr, cos: { ...myCos() }, name: profile.name, skipLabel: xr ? 'Press B to skip' : 'SPACE to skip' });
 });
 net.on('jailStart', () => { cut.serverDone = true; if (prison.me) prison.me.state = 'in'; G.me.hp = MAX_HEALTH; G.me.alive = true; G.death = null; });
 net.on('pMe', (m) => prison.onMe(m));
@@ -665,11 +864,10 @@ function safeFrame() {
   catch (e) {
     console.error(e);
     const t = performance.now();
-    if (t - lastErrAt > 5000) { lastErrAt = t; net.send({ type: 'clientError', msg: String(e && e.message || e).slice(0, 300), stack: String(e && e.stack || '').slice(0, 600) }); }
+    if (t - lastErrAt > 5000) { lastErrAt = t; reportError('frame: ' + (e && e.message || e), '', 0, e && e.stack); }
     try { desk.endFrame(); renderer.render(scene, camera); } catch {}
   }
 }
-window.addEventListener('error', (e) => net.send({ type: 'clientError', msg: String(e.message).slice(0, 300), stack: String(e.error && e.error.stack || '').slice(0, 600) }));
 
 const clock = new THREE.Clock();
 const tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), tmpV2 = new THREE.Vector3();
@@ -700,7 +898,7 @@ function frame() {
     if (!isGorillaBody()) trackRealHeight(); // Gorilla body has no feet, so no height offset to calibrate
     const head = headWorld(new THREE.Vector3());
     // menu
-    if (L.pressed.b) { if (vrui.menuOpen) { vrui.closeMenu(); shopMenu.close(); } else if (inRoom) vrui.openMenu(menuModel()); }
+    if (L.pressed.b) { if (vrui.menuOpen) { vrui.closeMenu(); shopMenu.close(); G.vrMissions = false; } else if (inRoom) { G.vrMissions = false; vrui.openMenu(menuModel()); } }
     vrui.boardHeld = !!L.held.stick;
     // turning
     const turn = R.stick.x;
@@ -827,11 +1025,13 @@ function frame() {
         prompt = carPrompt(car, 'Grip');
         if ((st.pressed.grip || st.held.grip) && t - (G.hijackAt || 0) > 0.8) { G.hijackAt = t; net.send({ type: 'hijack', id: car.id }); vrInput.pulse(side, 0.6, 60); }
       }
+      // CITY BANK vault (drill with grip held, grab the cash with grip)
+      if (!prompt && !G.ride) { const v = vaultInteract(head, L.held.grip || R.held.grip, L.pressed.grip || R.pressed.grip, true, t); if (v) prompt = v; }
       // stores: squeeze grip near a shopkeeper to open the store (the Golden Sniper is sold in the GUN SHOP list)
       const store = !prompt && !G.ride && !vrui.menuOpen ? shopMenu.near(head) : null;
       if (store) {
         const why = shopMenu.status(store);
-        prompt = why ? `🛒 ${why}` : `🛒 Squeeze grip to shop at ${store.name}`;
+        prompt = why ? `🛒 ${why}` : shopMenu.promptFor(store.name, true);
         if (!why && (L.pressed.grip || R.pressed.grip) && t - (G.buyAt || 0) > 0.6) { G.buyAt = t; shopMenu.openVR(store.name); vrui.openMenu(shopMenu.vrModel()); vrInput.pulse('right', 0.3, 30); }
       }
       // Golden Sniper: flick the right stick up/down to change the scope zoom
@@ -901,16 +1101,17 @@ function frame() {
         else if (desk.mouse.wheel) weapons.cycle(desk.mouse.wheel > 0 ? 1 : -1);
         const eye = camera.getWorldPosition(new THREE.Vector3()), dir = camera.getWorldDirection(new THREE.Vector3());
         const it = G.ride ? null : pickups.aimed(eye, dir, 3);
-        let store = null;
+        let store = null, vault = null;
         G.prompt = it ? `Press E to pick up ${pickups.label(it)}` : null;
         const perp = isCop() ? arrestTarget(walker.feet.clone().setY(walker.feet.y + walker.height - 0.1), 2.4, false) : null;
         const crook = !perp && isCop() ? crookNear(walker.feet.clone().setY(walker.feet.y + walker.height - 0.1), 2.6) : null;
         if (perp) { G.prompt = `🚔 Press E to ARREST ${perp.info.name}`; if (desk.hit('KeyE')) net.send({ type: 'arrest', id: perp.info.id }); }
         else if (crook) { G.prompt = `🚔 Press E to ARREST the robber${crook.state === 2 ? ' (he gave up)' : ''}`; if (desk.hit('KeyE')) net.send({ type: 'arrestCrook', id: crook.id }); }
         else if (it) { it.highlight = 1; if (desk.hit('KeyE')) net.send({ type: 'pickup', id: it.def.id }); }
+        else if (!G.ride && (vault = vaultInteract(eye, desk.down('KeyE'), desk.hit('KeyE'), false, t))) G.prompt = vault;
         else if (!G.ride && (store = shopMenu.near(eye))) {
           const why = shopMenu.status(store);
-          G.prompt = shopMenu.isOpen() ? null : why ? `🛒 ${why}` : `🛒 Press E to shop at ${store.name}`;
+          G.prompt = shopMenu.isOpen() ? null : why ? `🛒 ${why}` : shopMenu.promptFor(store.name, false);
           if (!why && !shopMenu.isOpen() && desk.hit('KeyE') && performance.now() - (shopMenu.closedAt || 0) > 300) shopMenu.openPC(store.name);
         }
         else {
@@ -963,6 +1164,15 @@ function frame() {
   weapons.update(dt, moving);
   if (G.death) G.death.t -= dt;
   boosts.tickBoost();
+  bankView.update(dt, t);
+  if (G.tutPending && canAct && !prison.prisoner && !cut.active && (xr || G.view === 'playing')) { G.tutPending = false; tut.start(xr, tutPos(xr)); }
+  if (tut.active) { if (!inRoom) tut.stop(); else if (G.me.alive && !cut.active) tut.update({ pos: tutPos(xr), board: xr ? vrui.menuOpen : G.showBoard, shop: shopMenu.shop, t }); }
+  if (G.job && G.job.target) marker.show(G.job.target, G.job.kind === 'taxi' ? (G.job.phase === 'pickup' ? '🙋 PASSENGER' : '🚕 STOP') : (G.job.phase === 'pickup' ? '🍔 PICK UP' : '📦 DELIVER'), G.job.phase === 'pickup' ? 0x3ae374 : 0xffd23f);
+  else if (tut.target()) marker.show(tut.target(), '💼 JOBS', 0x00b4d8);
+  else marker.hide();
+  marker.update(t, camera.getWorldPosition(new THREE.Vector3()));
+  // VR: the job / getaway line shows as a notice now and then (there's no HUD line in the headset)
+  if (xr && inRoom) { const tl = taskLine(camera, true); if (tl && (tl.split(' · ')[0] !== G.vrTaskKey || t - (G.vrTaskAt || 0) > 9)) { G.vrTaskKey = tl.split(' · ')[0]; G.vrTaskAt = t; vrui.setNotice(tl, 2.6); } }
   if (!xr && shopMenu.isOpen()) shopMenu.update(camera.getWorldPosition(new THREE.Vector3()), G.me.alive && inRoom && !driving.active && !G.ride);
   updateRobbery(t, canAct && !driving.active && !cut.active && !prison.prisoner && !(xr && vrui.menuOpen) && (xr || G.view === 'playing'));
 
@@ -997,12 +1207,14 @@ function frame() {
   if (inRoom) {
     const ws = weapons.current;
     const st = {
-      dt, hp: G.me.hp, armor: G.me.armor || 0, boost: Math.ceil(boosts.boostLeft()), weapon: ws, slots: weapons.slots, cur: weapons.cur, reloading: weapons.reloading, reloadP: weapons.reloadProgress(),
+      dt, hp: G.me.hp, armor: G.me.armor || 0, boost: Math.ceil(boosts.boostLeft()), lvl: G.room ? levelProgress(myXp()) : null, weapon: ws, slots: weapons.slots, cur: weapons.cur, reloading: weapons.reloading, reloadP: weapons.reloadProgress(),
       timer: G.matchEnd ? fmt((G.matchResetAt - t)) : fmt(G.remaining), teams: MODES[G.room.mode].teams, teamScores: G.room.teamScores,
       kills: G.players.get(G.room.you)?.kills || 0, deaths: G.players.get(G.room.you)?.deaths || 0,
       prompt: G.prompt, death: G.death, driving: driving.active, cash: G.players.get(G.room.you)?.cash || 0, wanted: G.me.wanted,
       rob: G.arrestBar ? arrestBarState(t) : G.rob && t - G.rob.at < 0.9 ? G.rob : null,
       prison: prison.prisoner && !cut.active ? prison.panel(G.players.get(G.room.you)?.jail === 3) : null, sub: prison.sub && !cut.active ? prison.sub.text : null, showBoard: G.showBoard || !!G.matchEnd, board: boardModel(),
+      task: inRoom ? taskLine(camera) : null,
+      missions: G.missions && !prison.prisoner && !cut.active && (G.showBoard || G.view === 'paused' || performance.now() < (G.missionsShowUntil || 0)) ? missionsHtml(G.missions) : null,
       matchEnd: G.matchEnd, matchResetIn: G.matchResetAt - t, showFps: settings.showFps, fps: G.fps, ping: Math.round(net.rtt * 1000),
       vignette: settings.vignette ? THREE.MathUtils.clamp(((G.vrSpeed || 0) - 1.5) / 5, 0, 0.85) : 0,
       teamText: MODES[G.room.mode].teams ? `RED ${G.room.teamScores[0]} : ${G.room.teamScores[1]} BLUE` : null
@@ -1258,10 +1470,14 @@ function sendState(xr) {
 }
 
 function menuModel() {
-  return { settings, role: myRole(), mic: G.mic, code: G.room?.code || '', teams: G.room && MODES[G.room.mode].teams, isHost: G.room && G.room.hostId === G.room.you && !G.room.isPublic, mode: G.room?.mode };
+  return { settings, tutorial: tut.active, missions: G.missions ? `${G.missions.list.filter(q => q.done).length}/3` : '', role: myRole(), mic: G.mic, code: G.room?.code || '', teams: G.room && MODES[G.room.mode].teams, isHost: G.room && G.room.hostId === G.room.you && !G.room.isPublic, mode: G.room?.mode };
 }
 function menuAction(act) {
-  if (act.startsWith('shop:')) { if (act === 'shop:close') { shopMenu.close(); vrui.closeMenu(); } else if (act.startsWith('shop:buy:')) shopMenu.buy(act.slice(9)); }
+  if (act === 'tutskip') { tut.skip(); vrui.closeMenu(); }
+  else if (act === 'bug') { sendBug('(reported from VR: no text, check the position and what was going on)'); vrui.closeMenu(); }
+  else if (act === 'missions') G.vrMissions = true;
+  else if (act === 'missions:back') G.vrMissions = false;
+  else if (act.startsWith('shop:')) { if (act === 'shop:close') { shopMenu.close(); vrui.closeMenu(); } else if (act.startsWith('shop:buy:')) shopMenu.buy(act.slice(9)); }
   else if (act === 'resume') vrui.closeMenu();
   else if (act === 'move') setSetting('moveMode', { gorilla: 'both', both: 'joystick', joystick: 'gorilla' }[settings.moveMode]);
   else if (act === 'turn') {
@@ -1284,7 +1500,7 @@ function menuAction(act) {
   else if (act === 'team') net.send({ type: 'switchTeam' });
   else if (act === 'mode') { const m = G.room.mode === 'ffa' ? 'tdm' : 'ffa'; net.send({ type: 'settings', mode: m, killLimit: MODES[m].killLimit, timeLimit: G.room.timeLimit }); }
   else if (act === 'leave') { vrui.closeMenu(); leaveRoom(); }
-  if (vrui.menuOpen) vrui.model = shopMenu.vrOpen ? shopMenu.vrModel() : menuModel();
+  if (vrui.menuOpen) vrui.model = shopMenu.vrOpen ? shopMenu.vrModel() : G.vrMissions ? missionsVrModel() : menuModel();
 }
 
 weapons.onFire = (w) => { if (renderer.xr.isPresenting) vrInput.pulse('right', Math.min(1, WEAPONS[w].kick * 5 + 0.2), w === 'rocket' || w === 'shotgun' ? 90 : 35); };
@@ -1309,6 +1525,6 @@ async function start() {
   const unlock = () => { audio.unlock(); if (G.view === 'menu' || G.view === 'lobby') audio.startMusic(); };
   window.addEventListener('pointerdown', unlock, { once: false });
   window.addEventListener('keydown', unlock, { once: true });
-  window.__npcMap = npcs.map; window.__cc = { cars, driving, menuAction: (a) => menuAction(a), G, desk, vrui, vrInput, net, walker, vrMover, weapons, remote, renderer, rig, camera, city, map, world, pickups, scene, prison, prisonView, cut, npcs, gold, boosts, shopMenu };
+  window.__npcMap = npcs.map; window.__cc = { cars, driving, menuAction: (a) => menuAction(a), G, desk, vrui, vrInput, net, walker, vrMover, weapons, remote, renderer, rig, camera, city, map, world, pickups, scene, prison, prisonView, cut, npcs, gold, boosts, shopMenu, bankView, marker };
 }
 start();
