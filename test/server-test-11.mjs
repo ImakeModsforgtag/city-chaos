@@ -22,7 +22,7 @@ console.log('CITY CHAOS server test 11 (NPC robbers + car thieves) - in-process'
 const A = room.addPlayer(mk(1), { name: 'Watcher' });
 T += 3; room.tick(0.03); room.spawn(A); A.protectUntil = 0;
 pose(A, 115, 1.6, 115);   // far corner, out of the way
-C.nextAt = Infinity;      // only the robbers this test starts
+C.nextAt = Infinity; C.bossAt = Infinity;      // only the robbers this test starts (no boss crews here, see test 20)
 
 // ---------------------------------------------------------------- every store can be robbed by an NPC
 const realCops = C.sendCops; C.sendCops = () => {};

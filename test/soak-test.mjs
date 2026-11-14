@@ -126,7 +126,8 @@ function check() {
   }
   for (const n of room.npcs.list) if (![n.x, n.y, n.z].every(Number.isFinite)) bad(`npc NaN type ${n.type}`);
   if (room.npcs.list.length > 160) bad(`too many NPCs (${room.npcs.list.length})`);
-  if (room.npcs.list.filter(n => n.type === 6).length > 2) bad('more than 2 robbers');
+  if (room.npcs.list.filter(n => n.type === 6 && !n.boss && !n.guard).length > 3) bad('more than 3 normal robbers (3 at night)');
+  if (room.npcs.list.filter(n => n.type === 6 && (n.boss || n.guard)).length > 3) bad('more than one boss crew');
   for (const c of room.vehicles.cars) if (![c.x, c.z, c.yaw, c.speed].every(Number.isFinite)) bad('car NaN');
   if (room.vehicles.cars.length > 60) bad(`too many cars (${room.vehicles.cars.length})`);
   if (!['closed', 'drilling', 'open', 'lockdown'].includes(room.bank.state)) bad('bank state');

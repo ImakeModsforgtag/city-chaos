@@ -1,0 +1,53 @@
+// 👕 THREADS clothing store (in-process): buying outfits with cash, wearing / taking off, owned outfits saved,
+// outfits you don't own can't be worn (join or cosmetics message), everyone sees your outfit.
+import { Room } from '../server/room.js';
+import { OUTFITS } from '../public/shared/wardrobe.js';
+import { peekToken } from '../public/shared/profile.js';
+
+let failures = 0;
+const ok = (c, msg) => { console.log((c ? '  PASS ' : '  FAIL ') + msg); if (!c) failures++; };
+let nextId = 1;
+const mk = () => { const id = nextId++; return { id, token: 't' + id, msgs: [], send(m) { this.msgs.push(m); }, sendRaw(d) { this.msgs.push(JSON.parse(d)); } }; };
+let T = 1000;
+const room = new Room('WEAR', { mode: 'ffa', crooks: false, missions: false }, { tokens: new Map() }); room.now = () => T;
+const run = (sec) => { for (let i = 0; i < sec * 10; i++) { T += 0.1; for (const q of room.players.values()) if (q.pose) q.lastStateAt = T; room.tick(0.1); } };
+const last = (p, type) => p.client.msgs.filter(m => m.type === type).pop();
+const pose = (p, x, y, z) => { p.pose = { h: [x, y, z, 0, 0, 0, 1], l: [x, y - 0.5, z, 0, 0, 0, 1], r: [x, y - 0.5, z, 0, 0, 0, 1] }; p.hist = []; };
+const K = room.npcs.map.threads;
+const shop = (p, item) => { T += 0.5; room.handle(p, { type: 'shopBuy', shop: 'THREADS', item }); return last(p, 'shopResult'); };
+console.log('CITY CHAOS server test 21 (THREADS clothing store) - in-process');
+const A = room.addPlayer(mk(), { name: 'Fashion', cos: { outfit: 4 } }), B = room.addPlayer(mk(), { name: 'Watcher' });
+T += 3; room.tick(0.03); room.spawn(A); room.spawn(B);
+ok(!!K && room.npcs.map.mannequins.length === 3, 'the plaza has a THREADS counter with 3 mannequins');
+ok(A.cos.outfit === 0, 'joining with an outfit you don\'t own: no outfit');
+ok(last(A, 'wardrobe') && last(A, 'wardrobe').owned.length === 0, 'new players own no outfits');
+pose(A, K[0] - 1.5, 1.75, K[2]); A.cash = 100;
+let r = shop(A, 'buy:1');
+ok(r.ok === 0 && A.cash === 100, `too poor for the Hoodie ($${OUTFITS[1].price})`);
+A.cash = 5000;
+r = shop(A, 'buy:4');
+ok(r.ok === 1 && A.cash === 5000 - OUTFITS[4].price && A.prof.wardrobe.includes(4) && A.cos.outfit === 4, `bought the Tuxedo for $${OUTFITS[4].price} and it goes on`);
+const pu = B.client.msgs.filter(m => m.type === 'playerUpdate' && m.p.id === A.id).pop();
+ok(pu && pu.p.cos.outfit === 4, 'everyone sees the Tuxedo');
+ok(shop(A, 'buy:4').ok === 0, 'can\'t buy it twice');
+r = shop(A, 'buy:2'); ok(r.ok === 1 && A.cos.outfit === 2 && A.prof.wardrobe.join() === '2,4', 'bought a Hawaiian Shirt too');
+r = shop(A, 'wear:4'); ok(r.ok === 1 && A.cos.outfit === 4, 'switch back to the Tuxedo');
+r = shop(A, 'wear:0'); ok(r.ok === 1 && A.cos.outfit === 0, 'take the outfit off');
+ok(shop(A, 'wear:6').ok === 0, 'can\'t wear an outfit you don\'t own');
+room.handle(A, { type: 'cosmetics', cos: { outfit: 6 } }); ok(A.cos.outfit === 0, 'a cosmetics message can\'t sneak on an outfit you don\'t own');
+room.handle(A, { type: 'cosmetics', cos: { outfit: 2 } }); ok(A.cos.outfit === 2, 'but one you own works (CUSTOMIZE)');
+pose(A, K[0] - 20, 1.75, K[2]); ok(shop(A, 'buy:1').ok === 0, 'you have to be at the counter');
+run(6);
+const tok = last(A, 'save').token;
+ok(peekToken(tok).wardrobe.join() === '2,4', 'your outfits are saved');
+const A2 = room.addPlayer(mk(), { name: 'Fashion', cos: { outfit: 4 }, profile: tok });
+T += 3; room.tick(0.03);
+ok(A2.cos.outfit === 4 && last(A2, 'wardrobe').owned.join() === '2,4', 'coming back with your save: you can wear them');
+// emotes ride along in this test: relayed to everyone, rate limited, junk ignored
+const em = () => B.client.msgs.filter(m => m.type === 'emote').length;
+const e0 = em(); T += 2; room.handle(A2, { type: 'emote', e: 2 });
+ok(em() === e0 + 1 && B.client.msgs.filter(m => m.type === 'emote').pop().id === A2.id, 'an emote is sent to everyone');
+room.handle(A2, { type: 'emote', e: 3 }); ok(em() === e0 + 1, 'emote spam is rate limited');
+T += 2; room.handle(A2, { type: 'emote', e: 99 }); room.handle(A2, { type: 'emote', e: 'x' }); ok(em() === e0 + 1, 'junk emotes are ignored');
+console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');
+process.exit(failures ? 1 : 0);
