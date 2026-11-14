@@ -619,6 +619,9 @@ You pay with the cash you earn from robberies and bounties (shown at the top of 
 - The store won't take your money for nothing: no food at full health, no ammo when you're full, no smaller armor than you have.
 - You can't shop while a store is closed after a robbery, while the clerk is being robbed (hands up), when the clerk is down, from inside a car, or in prison. The server checks your distance to the counter, that there's no wall in between, and your cash.
 - The secret **Golden Sniper** is now bought from the GUN SHOP menu too: it shows up as the first item, and only for the cop who unlocked it.
+  **Unlock:** be a **cop** and make **3 arrests** in that session. Cuffing the **NPC robbers counts**, as well as arresting wanted
+  players, so one player alone can earn it. On the third arrest that cop (and only that cop) gets a private message. Then buy it
+  at the GUN SHOP counter for $750. Still only one per game, and kills with it still show up as plain sniper kills.
 
 ## 8b. Prison: arrest cutscene and escaping
 

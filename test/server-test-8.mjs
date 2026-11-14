@@ -1,4 +1,5 @@
-// Golden Sniper test (in-process, controllable clock): unlock after 5 arrests, buying at the GUN SHOP,
+// Golden Sniper test (in-process, controllable clock): unlock after GOLDEN.arrests arrests (wanted players or
+// NPC robbers), buying at the GUN SHOP,
 // one per game, secret (no public messages), lock-on headshots that land when the bullet arrives.
 // Run: node test/server-test-8.mjs   (no server needed)
 import { Room } from '../server/room.js';
@@ -33,9 +34,28 @@ const E = room.addPlayer(mk(4), { name: 'Bystander' });
 T += 3; room.tick(0.03);
 for (const p of [C, A, D, E]) { room.spawn(p); p.protectUntil = 0; }
 
-// ---- unlock: 5 arrests, told only to that cop
+// ---- cuffing NPC robbers counts toward the unlock too (so you can earn it without a full room)
+{
+  const K = room.addPlayer(mk(9), { name: 'Rookie', role: 'cop' }); K.role = 'cop'; room.spawn(K); K.protectUntil = 0;
+  room.npcs.crooks.sendCops = () => {};
+  for (let i = 0; i < GOLDEN.arrests; i++) {
+    pose(K, 47, 1.6, -76);   // stand clear of the shop, or the robber won't try it
+    const n = room.npcs.crooks.startRobbery(T);   // any shop that isn't closed from the last one
+    if (!n) { ok(false, 'a robber hits a store'); break; }
+    for (let s = 0; s < 60 && n.phase !== 'rob'; s += 0.05) { T += 0.05; room.npcs.tick(0.05); }
+    pose(K, n.x + 1.2, n.y + 1.6, n.z);
+    room.handle(K, { type: 'arrestCrook', id: n.id });
+  }
+  ok(K.arrests === GOLDEN.arrests, `NPC robber arrests count (${K.arrests}/${GOLDEN.arrests})`);
+  const ki = last(K, 'goldInfo');
+  ok(ki && ki.unlocked === 1 && ki.first === 1, 'the cop who cuffs robbers gets the private unlock message');
+  ok(!leaks(A).length && !leaks(E).length, 'and it stays a secret');
+  K.client.msgs.length = 0; room.gold.owner = null; K.arrests = 0; K.left = true; room.removePlayer(K.id);
+}
+
+// ---- unlock: arrests of wanted players, told only to that cop
 for (let i = 0; i < GOLDEN.arrests; i++) {
-  if (i === GOLDEN.arrests - 1) ok(!msgs(C, 'goldInfo').length, `nothing is said before the ${GOLDEN.arrests}th arrest`);
+  if (i === GOLDEN.arrests - 1) ok(!msgs(C, 'goldInfo').length, `nothing is said before arrest ${GOLDEN.arrests}`);
   A.wanted = 1; A.jail = null; A.holding = null; A.alive = true;
   pose(A, 10, 1.6, 10); pose(C, 11, 1.6, 10);
   room.handle(C, { type: 'arrest', id: A.id });
