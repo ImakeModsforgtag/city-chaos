@@ -140,6 +140,7 @@ Your **left wrist** shows health, timer and score. The **gun** shows its ammo.
 | 1 / 2 / 3, mouse wheel, Q | Switch weapon |
 | Tab | Scoreboard |
 | M | 🗺️ Big city map (click to set your GPS) |
+| V | 📷 Camera: click = photo, hold = video, F = selfie |
 | P | 📱 Phone |
 | Esc | Pause menu |
 | Space / Enter | Skip the arrest cutscene |
@@ -517,6 +518,24 @@ All sounds are still made in the browser (no audio files to download), now with 
   - **VR:** look at your wrist phone and tap **🗺️ MAP**: the screen turns into the whole city map with you and your target.
     Tap **◀ BACK** to return to the apps.
 
+## 8-unvicies. 📷 The camera (photos + videos)
+
+- **PC:** press **V** to take out the camera (your gun goes away; V again, or 1/2/3/Q, brings the gun back).
+  **Click = photo**, **hold the left mouse button = record a video** (let go to stop, 30 seconds max), **F = selfie**.
+- **VR:** Y menu > **📷 CAMERA**, or tap **📷** on your wrist phone. The camera sits in your right hand with a **live
+  screen on the back** so you can frame the shot. **Tap the trigger = photo**, **hold the trigger = video**, **A = selfie**
+  (turn the camera around to get yourself and your friends in the picture), **B = back to your gun**.
+- In selfie mode **you appear in the picture** with your outfit (and your emotes: dance, then take the selfie).
+- Photos are saved as **JPG (1600 x 1200)** and videos as **MP4** (or WEBM if the browser can't do MP4), 640 x 480 at
+  24 fps **with the game's sound**, all with a small CITY CHAOS logo in the corner.
+- **Where they go:** a web game can't put files straight into the Quest **Gallery** (only the headset's own capture can).
+  They download to the **Downloads** folder instead. **On Quest:** open the **Files** app (App library > Files) and look
+  in Downloads / Recents. **On PC:** your normal Downloads folder.
+- The phone's **🖼️ Photos** app (PC) shows your last 30 photos and 6 videos (kept on this device) with **⬇ Save** to
+  download one again and **🗑** to delete it.
+- Want it in the Quest Gallery anyway? Use the headset's own capture at the same time: **hold the Meta button and tap the
+  trigger** for a screenshot, **hold the Meta button and hold the trigger** to start / stop a video.
+
 ## 8-septies. First-time tutorial and bug reports
 
 **Tutorial.** New players get a short 7-step tutorial the first time they're in the city (blue panel at the top on PC,
@@ -688,7 +707,7 @@ city-chaos/
 │   ├── js/net/             networking (network.js) + voice chat (voice.js)
 │   ├── js/player/          avatars, other players (interpolation), NPC visuals
 │   ├── js/ui/              menus, HUD, settings, desktop input, store menus (shopMenu.js), phone.js, citymap.js (minimap + big map)
-│   ├── js/world/           daynight.js (sun, sky, lights), weather.js (rain, storms), races, turf, apartments, holiday event
+│   ├── js/world/           daynight.js (sun, sky, lights), weather.js (rain, storms), photocam.js (📷 camera), races, turf, apartments, holiday event
 │   ├── js/prison/          prison visuals, arrest cutscene, prison interactions
 │   ├── js/audio/           synthesized sound effects + music
 │   └── vendor/three/       Three.js (bundled, no internet CDN needed)
@@ -704,6 +723,12 @@ city-chaos/
 **Tested and passing:**
 - **Phone (`test/browser/phone_test.py`):** PC: P opens it with your money and missions, the GPS beam, Esc closes it without pausing. Emulated Quest 3: hidden during normal play, shown when you roll your wrist toward your face, tapping WAVE with the right hand sends a wave.
 - **Sound (`test/browser/sound_test.py`):** the radio starting in your own car, N going through all three stations and off, stopping when you get out; new gunshots near and far, explosions and the park / winter ambience with no errors.
+- **Camera (`test/browser/camera_test.py`, `test/browser/quest3_camera_test.py`):** V takes it out and hides the gun, a click
+  saves a 1600 x 1200 JPG that's properly exposed, F flips to selfie (you're in the shot), holding records an MP4 with data,
+  the phone Photos app lists them, Esc closes it, putting it away brings the gun back. On the emulated Quest 3: Y menu >
+  CAMERA puts it in your right hand, the live screen draws, a trigger tap saves a photo from inside VR, A = selfie,
+  holding the trigger records a video, B puts it away. **Not tested on a real headset yet:** how the Quest browser
+  handles a download while you're in VR, and whether its MediaRecorder makes MP4 or WEBM.
 - **Living city (`test/server-test-27.mjs`, `test/browser/daynight_test.py`, `test/browser/citymap_test.py`):** the clock
   (wraps after 24 minutes, day/night hours, the weather cycle), pinning the test clock, pedestrians dancing and waving back
   and turning to face you, far away peds ignoring you, gunfire beating a dance, race fans gathering (once), cheering on GO,
