@@ -53,7 +53,7 @@ export const MAX_SLOTS = 3;           // carried weapons
 export const DEFAULT_WEAPON = 'pistol';
 
 // Golden Sniper rules (shared so the client and server agree)
-export const GOLDEN = { price: 750, arrests: 5, lockDegServer: 8, minFlight: 0.5, maxFlight: 2.2 };
+export const GOLDEN = { price: 750, arrests: 3, lockDegServer: 8, minFlight: 0.5, maxFlight: 2.2 };
 // how long the golden bullet flies (bullet cam length); damage lands when it arrives
 export function goldenFlight(dist) { return Math.min(GOLDEN.maxFlight, Math.max(GOLDEN.minFlight, dist / WEAPONS.golden.bulletSpeed)); }
 // what everyone else sees in the kill feed: it's a secret, so it shows up as a normal sniper

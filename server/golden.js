@@ -1,5 +1,6 @@
 // CITY CHAOS - the secret Golden Sniper (server authority).
-// * A cop who has made 5 arrests can buy it at the GUN SHOP counter. Only ONE exists per game.
+// * A cop who has made GOLDEN.arrests arrests (players or NPC robbers) can buy it at the GUN SHOP counter.
+//   Only ONE exists per game.
 // * Nothing about it is announced: unlock/buy messages go only to that player, and kills with it
 //   show up for everyone else as a normal sniper kill.
 // * Shots lock onto the target they were aimed close to (checked here: angle, range, line of sight)
@@ -29,8 +30,9 @@ export class GoldenSniper {
   // tell only the players who unlocked it (quietly) whether it's still for sale
   notifyUnlocked() { for (const q of this.room.players.values()) if (this.unlocked(q)) this.room.sendTo(q, this.info(q)); }
 
-  // a cop player arrested someone
+  // a cop player arrested someone (a wanted player, or an NPC robber)
   onArrest(cop) {
+    if (!cop || cop.role !== 'cop') return;
     cop.arrests = (cop.arrests || 0) + 1;
     if (cop.arrests === GOLDEN.arrests) this.room.sendTo(cop, this.info(cop, { first: 1 }));
   }

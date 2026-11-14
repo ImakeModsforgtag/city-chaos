@@ -408,6 +408,7 @@ export class Crooks {
       if (n.boss) this.room.saves.addXP(p, BOSS.xp, 'boss');
       p.cash = (p.cash || 0) + pay;
       this.room.saves.stat(p, 'crooks', 1, 'crookArrest');
+      if (this.room.gold) this.room.gold.onArrest(p);   // cuffing NPC robbers counts toward the Golden Sniper too
       this.room.sendTo(p, { type: 'crook', ev: 'bounty', id: n.id, cash: pay, loot: n.loot || 0, total: p.cash, arrest: 1 });
       this.room.broadcast({ type: 'playerUpdate', p: this.room.publicPlayer(p) });
     }
