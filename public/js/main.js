@@ -417,7 +417,7 @@ let miniOn = true; try { miniOn = localStorage.getItem('cc_minimap') !== '0'; } 
 miniEl.classList.toggle('hidden', !miniOn);
 let miniT = 0;
 function updateMinimap(t, xr) {
-  const show = miniOn && !xr && !!G.room && G.me.alive && !G.scoped;
+  const show = miniOn && !xr && !!G.room && G.me.alive && !G.scoped && !photocam.povOn;
   miniEl.style.display = show ? '' : 'none';
   if (!show || t - miniT < 0.1) return; miniT = t;
   const me = mapMe();
@@ -620,15 +620,26 @@ vrHolder.add(handR); handR.visible = false;
 
 // ---------------------------------------------------------------- 📷 the camera (V on PC, Y menu / phone in VR)
 const camNote = (t) => { toast(t); vrui.setNotice(t, 2.2); };
-const photocam = new PhotoCam({ renderer, scene, weapons, notify: camNote });
-// in selfie mode you show up in the picture: a copy of your avatar posed where you are
+const photocam = new PhotoCam({ renderer, scene, weapons, notify: camNote, raycast: (ox, oy, oz, dx, dy, dz, max) => world.raycast(ox, oy, oz, dx, dy, dz, max) });
+photocam._eye = () => camera.getWorldPosition(new THREE.Vector3());
+photocam._dir = () => camera.getWorldDirection(new THREE.Vector3());
+// with the front camera, or on the tripod, you show up in the picture: a copy of your avatar posed where you are
 const selfieAvatar = new Avatar(profile.cos, { isLocal: true }); selfieAvatar.root.visible = false; scene.add(selfieAvatar.root);
-photocam.beforeRender = () => {
-  if (!photocam.selfie || !G.myPose) return;
-  selfieAvatar.setPose(G.myPose.h, G.myPose.l, G.myPose.r, 1 / 30); selfieAvatar.emoteTick(); selfieAvatar.root.visible = true;
-};
-photocam.afterRender = () => { selfieAvatar.root.visible = false; };
-function toggleCamera() { if (!G.room) return; const on = photocam.toggle(); camNote(on ? (renderer.xr.isPresenting ? '📷 Camera out! Tap trigger: photo · hold: video · A: selfie · B: back to your gun' : '📷 Camera out! Click: photo · hold click: video · F: selfie · V: put it away') : '📷 Camera put away'); }
+function updateSelfieAvatar() {
+  const want = photocam.on && (photocam.front || photocam.onTripod);
+  photocam.selfieWanted = want;
+  if (want && G.myPose) { selfieAvatar.setPose(G.myPose.h, G.myPose.l, G.myPose.r, 1 / 30); selfieAvatar.emoteTick(); }
+  selfieAvatar.root.visible = want && photocam.povOn;   // looking through the tripod you see yourself standing there
+}
+photocam.beforeRender = () => { if (photocam.selfieWanted) selfieAvatar.root.visible = true; };
+photocam.afterRender = () => { selfieAvatar.root.visible = !!(photocam.selfieWanted && photocam.povOn); };
+function camPrompt() {
+  if (photocam.recording) return '🔴 Recording · click 🎥 on the bar, or let go, to stop';
+  if (photocam.povOn) return '🔺 Looking through the tripod · mouse aims it · click: photo · hold: video · T: pick it up · E: step away';
+  if (photocam.onTripod) return '🔺 Tripod placed · E: look through it · T: pick it up · click: photo';
+  return `📷 Click: photo · hold: video · ${photocam.front ? 'front' : 'back'} camera (F) · T: tripod · V: put away`;
+}
+function toggleCamera() { if (!G.room) return; const on = photocam.toggle(); camNote(on ? (renderer.xr.isPresenting ? '📷 Tablet out! Poke its buttons with your other hand · trigger: photo · hold: video · B: put away' : '📷 Tablet out! Click: photo · hold click: video · T: tripod · F: front/back · V: put away') : '📷 Camera put away'); }
 // 🖼️ PC photos viewer (phone > Photos)
 const photosEl = document.createElement('div'); photosEl.id = 'photos'; photosEl.className = 'hidden'; document.body.appendChild(photosEl);
 let photoUrls = [];
@@ -776,7 +787,7 @@ function playDesktop() {
   desk.lock();
 }
 function resumeDesktop() { setView('playing'); desk.lock(); }
-desk.onUnlock = () => { if (G.view === 'playing' && !shopMenu.isOpen() && !phone.isOpen() && !bigMap.isOpen() && photosEl.classList.contains('hidden')) setView('paused'); };   // the store panel frees the mouse without pausing
+desk.onUnlock = () => { if (G.view === 'playing' && !shopMenu.isOpen() && !phone.isOpen() && !bigMap.isOpen() && photosEl.classList.contains('hidden') && !photocam.on) setView('paused'); };   // Esc with the camera out just frees the mouse for its buttons   // the store panel frees the mouse without pausing
 $('clicktoplay').addEventListener('click', () => desk.lock());
 
 async function enterVR() {
@@ -824,7 +835,7 @@ function leaveRoom() {
   shopMenu.close(); G.job = null; G.heist = null; G.boss = null; marker.hide(); tut.stop(); audio.stopCarRadio(); cleanupRoom();
 }
 function cleanupRoom() {
-  photocam.setOn(false); closePhotos();
+  photocam.reset(); closePhotos();
   G.gold = null; if (G.bcam) endBulletCam(); gold.skip();
   if (driving.active) driving.exit();
   G.room = null; G.players.clear(); remote.clear(); npcs.clear(); cars.clear(); voice.closeAll(); G.me.wanted = 0; G.rob = null;
@@ -1294,7 +1305,7 @@ function frame() {
     vrui.boardHeld = !!L.held.stick;
     // turning
     const turn = R.stick.x;
-    if (!vrui.menuOpen && settings.turnMode !== 'off' && !driving.active) {
+    if (!vrui.menuOpen && settings.turnMode !== 'off' && !driving.active && !(photocam.on && photocam.onTripod)) {
       let ang = 0;
       if (settings.turnMode === 'snap') { if (Math.abs(turn) > 0.7 && snapReady) { ang = -Math.sign(turn) * THREE.MathUtils.degToRad(settings.snapAngle); snapReady = false; } if (Math.abs(turn) < 0.3) snapReady = true; }
       else ang = -turn * 2.4 * dt;
@@ -1377,8 +1388,12 @@ function frame() {
     } else if (canAct) {
       // weapons
       weapons.tryFire(R.trigger > 0.6, R.pressed.trigger);
-      if (photocam.on) { photocam.input(R.trigger > 0.6, performance.now() / 1000, R.pressed.trigger); if (R.pressed.a) photocam.flip(); }
-      else if (R.pressed.a) weapons.reload();
+      if (photocam.on) {
+        photocam.input(R.trigger > 0.6, performance.now() / 1000, R.pressed.trigger);
+        photocam.vrTap(lc && lc.grip);                       // poke the tablet buttons with your left hand
+        photocam.aimStick(R.stick.x, R.stick.y, dt);          // right stick aims the camera on its tripod
+        if (R.pressed.a) photocam.act('face');
+      } else if (R.pressed.a) weapons.reload();
       if (R.pressed.b) { if (G.ride) net.send({ type: 'exitCar' }); else if (photocam.on) { photocam.setOn(false); camNote('📷 Camera put away'); } else weapons.cycle(1); }
       let prompt = null; G.arrestPrompt = false;
       // arrest: cops grab a wanted player with either hand
@@ -1436,6 +1451,9 @@ function frame() {
         if (Math.abs(R.stick.y) > 0.75 && G.zoomReady !== false) { gold.zoom = R.stick.y < 0 ? 1 : 0; G.zoomReady = false; vrInput.pulse('right', 0.2, 20); }
         if (Math.abs(R.stick.y) < 0.3) G.zoomReady = true;
       }
+      if (photocam.on) prompt = photocam.recording ? '🔴 Recording · tap 🎥 on the tablet to stop'
+        : photocam.onTripod ? '🔺 On the tripod · right stick aims it · tap 📸 on the tablet · ✋ picks it up'
+        : '📷 Trigger: photo · hold: video · poke the tablet buttons with your other hand';
       G.prompt = prompt;
     } else G.prompt = null;
   } else {
@@ -1443,12 +1461,13 @@ function frame() {
     if (G.view === 'playing') {
       if (emoteWheel(desk.down('KeyG') && !!G.room && G.me.alive, desk.mouse.dx, desk.mouse.dy)) { desk.mouse.dx = 0; desk.mouse.dy = 0; }
       const zs = G.scoped ? camera.fov / settings.fov : 1; // slower aim while zoomed in
-      G.yaw -= desk.mouse.dx * 0.0022 * settings.mouseSens * zs;
-      G.pitch = THREE.MathUtils.clamp(G.pitch - desk.mouse.dy * 0.0022 * settings.mouseSens * zs, -1.5, 1.5);
+      if (photocam.povOn) photocam.aim(desk.mouse.dx, desk.mouse.dy, settings.mouseSens);   // the mouse aims the tripod camera
+      else { G.yaw -= desk.mouse.dx * 0.0022 * settings.mouseSens * zs;
+      G.pitch = THREE.MathUtils.clamp(G.pitch - desk.mouse.dy * 0.0022 * settings.mouseSens * zs, -1.5, 1.5); }
       if (!Number.isFinite(G.yaw)) G.yaw = 0;
       if (!Number.isFinite(G.pitch)) G.pitch = 0;
       G.showBoard = desk.down('Tab');
-      if (desk.hit('Escape')) desk.unlock();
+      if (desk.hit('Escape')) { if (photocam.povOn) photocam.exitPov(); else desk.unlock(); }
     } else G.showBoard = false;
     if (inRoom && driving.active) {
       // ---- desktop driving with a chase camera
@@ -1473,13 +1492,13 @@ function frame() {
       G.prompt = playing ? `${police ? '🚓' : '🚗'} ${Math.round(Math.abs(c.speed) * 3.6)} km/h · E: get out · H: honk${police ? ' · L: siren' : ''}` : null;
     } else if (inRoom) {
       const playing = G.view === 'playing' && G.me.alive;
-      const k = (c) => playing && desk.down(c);
+      const k = (c) => playing && !photocam.povOn && desk.down(c);
       const fx = -Math.sin(G.yaw), fz = -Math.cos(G.yaw);
       const wish = new THREE.Vector3((k('KeyD') ? 1 : 0) - (k('KeyA') ? 1 : 0), 0, (k('KeyS') ? 1 : 0) - (k('KeyW') ? 1 : 0));
       if (wish.lengthSq() > 1) wish.normalize();
       // rotate local wish into world (yaw)
       const w = new THREE.Vector3(wish.x * Math.cos(G.yaw) + wish.z * Math.sin(G.yaw), 0, -wish.x * Math.sin(G.yaw) + wish.z * Math.cos(G.yaw));
-      const ev = G.ride && rideCar() ? rideHold() : walker.update(dt, { wish: w, sprint: k('ShiftLeft') || k('ShiftRight'), jump: playing && desk.hit('Space'), jumpHeld: k('Space'), climb: k('KeyW') ? 1 : k('KeyS') ? -1 : (k('Space') ? 1 : 0), canClimb: !prisonView.active && !prison.prisoner });
+      const ev = G.ride && rideCar() ? rideHold() : walker.update(dt, { wish: w, sprint: k('ShiftLeft') || k('ShiftRight'), jump: playing && !photocam.povOn && desk.hit('Space'), jumpHeld: k('Space'), climb: k('KeyW') ? 1 : k('KeyS') ? -1 : (k('Space') ? 1 : 0), canClimb: !prisonView.active && !prison.prisoner });
       if (ev.step) audio.playStep(null, 0.8);
       if (ev.landed) audio.playStep(null, Math.min(1.6, ev.landed / 6));
       moving = wish.lengthSq() > 0.01 && walker.grounded;
@@ -1496,18 +1515,27 @@ function frame() {
         if (desk.hit('KeyP')) phone.toggle();
         if (desk.hit('KeyM')) { phone.el.classList.add('hidden'); bigMap.open(); }
         if (desk.hit('KeyV')) toggleCamera();
-        if (photocam.on) { photocam.input(desk.mouse.left && !driving.active, performance.now() / 1000, desk.mouse.leftPressed && !driving.active); if (desk.hit('KeyF')) photocam.flip(); }
+        if (photocam.on) {
+          photocam.input(desk.mouse.left && !driving.active, performance.now() / 1000, desk.mouse.leftPressed && !driving.active);
+          if (desk.hit('KeyF')) photocam.act('face');
+          if (desk.hit('KeyH')) photocam.act('fliph');
+          if (desk.hit('KeyJ')) photocam.act('flipv');
+          if (desk.hit('KeyZ')) photocam.act('zoom');
+          if (desk.hit('KeyT')) photocam.act('tripod');
+          if (desk.hit('KeyE') && photocam.onTripod) photocam.act('pov');
+          if (desk.mouse.wheel) photocam.act('zoom');
+        } else if (photocam.onTripod && desk.hit('KeyT')) photocam.pickUp();
         if (photocam.on && !G.ew && (desk.hit('Digit1') || desk.hit('Digit2') || desk.hit('Digit3') || desk.hit('KeyQ'))) photocam.setOn(false);
         if (!G.ew && desk.hit('Digit1')) weapons.switchTo(0);
         if (!G.ew && desk.hit('Digit2')) weapons.switchTo(1);
         if (!G.ew && desk.hit('Digit3')) weapons.switchTo(2);
         if (desk.hit('KeyQ')) weapons.cycle(-1);
         if (desk.mouse.wheel && G.scoped) gold.zoom = desk.mouse.wheel < 0 ? 1 : 0;   // scroll = scope zoom
-        else if (desk.mouse.wheel) weapons.cycle(desk.mouse.wheel > 0 ? 1 : -1);
+        else if (desk.mouse.wheel && !photocam.on) weapons.cycle(desk.mouse.wheel > 0 ? 1 : -1);
         const eye = camera.getWorldPosition(new THREE.Vector3()), dir = camera.getWorldDirection(new THREE.Vector3());
         const it = G.ride ? null : pickups.aimed(eye, dir, 3);
         let store = null, vault = null;
-        G.prompt = it ? `Press E to pick up ${pickups.label(it)}` : photocam.on ? (photocam.recording ? '🔴 Recording · let go of the mouse to stop' : '📷 Click: photo · hold: video · F: selfie · V: put away') : null;
+        G.prompt = it && !photocam.on ? `Press E to pick up ${pickups.label(it)}` : photocam.on ? camPrompt() : photocam.onTripod ? '🔺 Your camera is on its tripod · V: pick the tablet back up' : null;
         const perp = isCop() ? arrestTarget(walker.feet.clone().setY(walker.feet.y + walker.height - 0.1), 2.4, false) : null;
         const crook = !perp && isCop() ? crookNear(walker.feet.clone().setY(walker.feet.y + walker.height - 0.1), 2.6) : null;
         if (perp) { G.prompt = `🚔 Press E to ARREST ${perp.info.name}`; if (desk.hit('KeyE')) net.send({ type: 'arrest', id: perp.info.id }); }
@@ -1608,7 +1636,7 @@ function frame() {
     q.avatar.root.position.set(s.x - q.head[0], s.y - q.head[1], s.z - q.head[2]);
   }
   for (const [id, p] of remote.players) if (p.head) voice.setPosition(id, p.head[0], p.head[1], p.head[2]);
-  const viewCam = G.bcam && !G.bcam.xr ? gold.cam : camera; // desktop bullet cam renders from its own camera
+  const viewCam = G.bcam && !G.bcam.xr ? gold.cam : (photocam.povCam() || camera); // bullet cam and the tripod camera render from their own camera
   const camPos = viewCam.getWorldPosition(new THREE.Vector3());
   pickups.update(dt, t, camPos);
   npcs.cull = G.scoped ? 320 : G.bcam ? 140 : goldHeld && xr ? 160 : xr ? 34 : 50; // far NPCs must show up in the scope
@@ -1625,7 +1653,7 @@ function frame() {
   audio.setListener(camPos, new THREE.Vector3(0, 0, -1).applyQuaternion(camQ), new THREE.Vector3(0, 1, 0).applyQuaternion(camQ));
 
   if (inRoom) {
-    const ws = weapons.current;
+    const ws = photocam.on ? null : weapons.current;   // the ammo screen gets out of the way while you hold the tablet
     const st = {
       dt, hp: G.me.hp, armor: G.me.armor || 0, boost: Math.ceil(boosts.boostLeft()), lvl: G.room ? levelProgress(myXp()) : null, weapon: ws, slots: weapons.slots, cur: weapons.cur, reloading: weapons.reloading, reloadP: weapons.reloadProgress(),
       timer: G.matchEnd ? fmt((G.matchResetAt - t)) : fmt(G.remaining), teams: MODES[G.room.mode].teams, teamScores: G.room.teamScores,
@@ -1642,10 +1670,12 @@ function frame() {
     if (cut.active) { st.prompt = null; st.rob = null; st.death = null; st.prison = null; st.sub = null; }
     if (G.bcam) { st.prompt = null; st.rob = null; if (xr && settings.vignette) st.vignette = 0.55; }
     if (xr) vrui.update(dt, st); else if ((G.view === 'playing' || G.view === 'paused') && !cut.active) hud.update(st);
-    if (!xr) hud.show((G.view === 'playing' || G.view === 'paused') && !cut.active && !G.bcam);
+    if (!xr) hud.show((G.view === 'playing' || G.view === 'paused') && !cut.active && !G.bcam && !photocam.povOn);
   }
   desk.endFrame();
-  if (photocam.on) { photocam.weapons.vr = xr; photocam.update(dt, performance.now() / 1000); }
+  photocam.weapons.vr = xr; weapons.deskHolder.visible = !photocam.povOn;   // looking through the tripod: your own hands stay behind
+  photocam.hudOk = G.view === 'playing' && !cut.active;
+  updateSelfieAvatar(); photocam.update(dt, performance.now() / 1000);
   if (xr && goldHeld && weapons.model) gold.renderScope(renderer, scene, weapons.model, camPos, true); // zoomed view on the scope glass
   // automated screenshot tests only: window.__camOverride = { p:[x,y,z], l:[x,y,z] } renders from a free camera
   if (window.__camOverride && !xr) {
@@ -1959,6 +1989,6 @@ async function start() {
   const unlock = () => { audio.unlock(); if (G.view === 'menu' || G.view === 'lobby') audio.startMusic(); };
   window.addEventListener('pointerdown', unlock, { once: false });
   window.addEventListener('keydown', unlock, { once: true });
-  window.__npcMap = npcs.map; window.__cc = { cars, driving, menuAction: (a) => menuAction(a), G, desk, vrui, vrInput, net, walker, vrMover, weapons, remote, renderer, rig, camera, city, map, world, pickups, scene, prison, prisonView, cut, npcs, gold, boosts, shopMenu, bankView, marker, raceView, aptView, turfView, seasonView, phone, dayNight, weather, bigMap, cityMap, photocam };
+  window.__npcMap = npcs.map; window.__cc = { cars, driving, menuAction: (a) => menuAction(a), G, desk, vrui, vrInput, net, walker, vrMover, weapons, remote, renderer, rig, camera, city, map, world, pickups, scene, prison, prisonView, cut, npcs, gold, boosts, shopMenu, bankView, marker, raceView, aptView, turfView, seasonView, phone, dayNight, weather, bigMap, cityMap, photocam, selfieAvatar };
 }
 start();

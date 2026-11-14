@@ -352,3 +352,15 @@ h4.wk { color: #ffd23f; margin-top: 10px; }
 #photos .ph-shot div { display: flex; gap: 6px; margin-top: 4px; }
 #photos button { background: #ff4fa3; color: #fff; border: 3px solid #1d1442; border-radius: 12px; padding: 4px 10px; font: 800 13px Trebuchet MS, sans-serif; cursor: pointer; }
 #photos button[data-x] { background: #1d1442; } #photos .ph-shot button:first-child { flex: 1; }
+
+/* 📷 camera tablet: the same buttons as the tablet in your hands, with their keys */
+#camui { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 22; }
+#camui.hidden { display: none; }
+#camui .cam-row { display: flex; gap: 6px; background: rgba(29, 20, 66, 0.86); border: 3px solid #1d1442; border-radius: 18px; padding: 7px; }
+#camui button { width: 92px; background: #3b3360; color: #fff; border: 3px solid #1d1442; border-radius: 13px; padding: 5px 2px; font: 800 11px Trebuchet MS, sans-serif; cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.25; }
+#camui button.on { background: #ff4fa3; border-color: #fff; }
+#camui button span { font-size: 21px; }
+#camui button i { font-style: normal; font-size: 10px; opacity: 0.65; }
+#camui .cam-frame { display: none; }
+#camui.pov .cam-frame { display: block; position: fixed; left: 50%; top: 0; transform: translateX(-50%); height: 100vh; width: 133.34vh; box-sizing: border-box; border-left: 3px dashed rgba(255, 210, 63, 0.85); border-right: 3px dashed rgba(255, 210, 63, 0.85); box-shadow: 0 0 0 100vmax rgba(10, 6, 30, 0.35); pointer-events: none; }
+#camui small { display: block; text-align: center; margin-top: 4px; font: 700 11px Trebuchet MS, sans-serif; color: #fff; text-shadow: 1px 1px 0 #1d1442; opacity: 0.75; }
