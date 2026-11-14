@@ -30,6 +30,7 @@ import { AptView } from './world/apartment.js';
 import { SeasonView } from './world/season.js';
 import { Phone, GPS_PLACES } from './ui/phone.js';
 import { CityMap } from './ui/citymap.js';
+import { PhotoCam, library as photoLib, downloadBlob } from './world/photocam.js';
 import { DayNight } from './world/daynight.js';
 import { Weather } from './world/weather.js';
 import { fmtHour, isNight, weatherAt } from '/shared/daynight.js';
@@ -351,7 +352,7 @@ function leadersVrModel() {
 function sendEmote(e) { if (!G.room || performance.now() - (G.emoteAt || 0) < 1200) return; G.emoteAt = performance.now(); net.send({ type: 'emote', e }); }
 net.on('emote', (m) => {
   const E = EMOTES[m.e]; if (!E) return;
-  if (m.id === G.room?.you) { hud.notice(`${E.icon} ${E.name}`, 1200); return; }
+  if (m.id === G.room?.you) { hud.notice(`${E.icon} ${E.name}`, 1200); selfieAvatar.playEmote(m.e, E.icon); return; }
   const p = remote.players.get(m.id); if (p) p.avatar.playEmote(m.e, E.icon);
 });
 // PC emote wheel: hold G, move the mouse toward one (or press 1-8), let go of G
@@ -467,13 +468,15 @@ const phone = new Phone({ map, drawMap: (ctx, size) => drawWholeMap(ctx, size, f
     return { time: `${weather.kind === 'storm' ? '⛈' : weather.kind === 'rain' ? '🌧' : isNight(dayNight.hour) ? '🌙' : '☀️'} ${fmtHour(dayNight.hour)}`, cash: p ? p.cash || 0 : 0, bank: G.bank || 0, lvl: pr.lvl, frac: +pr.frac.toFixed(2),
              task: G.room ? taskLine(camera, true) : null, missions: G.missions ? G.missions.list.map(m => ({ text: m.text, prog: m.prog, goal: m.goal, done: m.done })) : [],
              weeklyDone: wk.filter(q => q.done).length, weeklyTotal: wk.length || 4, gifts: c ? `${c.got}/${c.total}` : '',
-             hasCar: !!(G.garage && G.garage.sel), inCar: driving.active, radio: audio.carRadioStation() };
+             hasCar: !!(G.garage && G.garage.sel), inCar: driving.active, radio: audio.carRadioStation(), camera: photocam.on };
   },
   act: (app, arg) => {
     if (app === 'car') callMyCar();
     else if (app === 'radio') { if (driving.active) radioNext(); else { toast('📻 Get in a car to use the radio'); vrui.setNotice('Get in a car for the radio', 2); } }
     else if (app === 'wave') sendEmote(0);
     else if (app === 'map') { phone.el.classList.add('hidden'); bigMap.open(); }
+    else if (app === 'cam') { if (!renderer.xr.isPresenting) phone.close(); toggleCamera(); }
+    else if (app === 'photos') openPhotos();
     else if (app === 'gps') { G.gps = arg; const t = arg ? `📍 GPS: follow the purple beam to ${arg.label}` : '📍 GPS off'; toast(t); vrui.setNotice(t, 2); }
   } });
 phone.onClose = () => { if (G.view === 'playing' && !renderer.xr.isPresenting) desk.lock && desk.lock(); };
@@ -615,8 +618,42 @@ const handL = localAvatar.lh, handR = localAvatar.rh;
 scene.add(handL); handL.visible = false;
 vrHolder.add(handR); handR.visible = false;
 
+// ---------------------------------------------------------------- 📷 the camera (V on PC, Y menu / phone in VR)
+const camNote = (t) => { toast(t); vrui.setNotice(t, 2.2); };
+const photocam = new PhotoCam({ renderer, scene, weapons, notify: camNote });
+// in selfie mode you show up in the picture: a copy of your avatar posed where you are
+const selfieAvatar = new Avatar(profile.cos, { isLocal: true }); selfieAvatar.root.visible = false; scene.add(selfieAvatar.root);
+photocam.beforeRender = () => {
+  if (!photocam.selfie || !G.myPose) return;
+  selfieAvatar.setPose(G.myPose.h, G.myPose.l, G.myPose.r, 1 / 30); selfieAvatar.emoteTick(); selfieAvatar.root.visible = true;
+};
+photocam.afterRender = () => { selfieAvatar.root.visible = false; };
+function toggleCamera() { if (!G.room) return; const on = photocam.toggle(); camNote(on ? (renderer.xr.isPresenting ? '📷 Camera out! Tap trigger: photo · hold: video · A: selfie · B: back to your gun' : '📷 Camera out! Click: photo · hold click: video · F: selfie · V: put it away') : '📷 Camera put away'); }
+// 🖼️ PC photos viewer (phone > Photos)
+const photosEl = document.createElement('div'); photosEl.id = 'photos'; photosEl.className = 'hidden'; document.body.appendChild(photosEl);
+let photoUrls = [];
+async function openPhotos() {
+  phone.el.classList.add('hidden');
+  const list = await photoLib.list();
+  photoUrls.forEach(u => URL.revokeObjectURL(u)); photoUrls = [];
+  const items = list.map(it => { const u = URL.createObjectURL(it.thumb || it.blob); photoUrls.push(u); return `<div class="ph-shot"><img src="${u}"><span>${it.kind === 'video' ? '🎥 ' + (it.secs || 0) + 's' : '📸'} ${new Date(it.at).toLocaleString()}</span><div><button data-save="${it.id}">⬇ Save</button><button data-del="${it.id}">🗑</button></div></div>`; }).join('');
+  photosEl.innerHTML = `<div class="cm-top"><b>🖼️ PHOTOS</b><span>${list.length ? 'Your last photos and videos (kept on this device). They were also saved to Downloads.' : 'No photos yet: press V to take out the camera.'}</span><button data-x>✖</button></div><div class="ph-grid">${items}</div>`;
+  photosEl._list = list; photosEl.classList.remove('hidden');
+  if (document.pointerLockElement) document.exitPointerLock();
+}
+function closePhotos() { if (photosEl.classList.contains('hidden')) return; photosEl.classList.add('hidden'); if (G.view === 'playing' && !renderer.xr.isPresenting) desk.lock && desk.lock(); }
+photosEl.addEventListener('mousedown', e => e.stopPropagation());
+photosEl.addEventListener('click', async (e) => {
+  e.stopPropagation();
+  if (e.target.closest('[data-x]')) return closePhotos();
+  const sv = e.target.closest('[data-save]'), dl = e.target.closest('[data-del]');
+  if (sv) { const it = photosEl._list.find(q => q.id === +sv.dataset.save); if (it) downloadBlob(it.blob, it.name); }
+  if (dl) { await photoLib.remove(+dl.dataset.del); openPhotos(); }
+});
+document.addEventListener('keydown', (e) => { if (!photosEl.classList.contains('hidden') && e.code === 'Escape') { e.preventDefault(); e.stopPropagation(); closePhotos(); } }, true);
+
 function rebuildLocalHands() {
-  localAvatar.setCosmetics(myCos());
+  localAvatar.setCosmetics(myCos()); try { selfieAvatar.setCosmetics(myCos()); } catch {}
 }
 
 // ------------------------------------------------------------------ state
@@ -739,7 +776,7 @@ function playDesktop() {
   desk.lock();
 }
 function resumeDesktop() { setView('playing'); desk.lock(); }
-desk.onUnlock = () => { if (G.view === 'playing' && !shopMenu.isOpen() && !phone.isOpen() && !bigMap.isOpen()) setView('paused'); };   // the store panel frees the mouse without pausing
+desk.onUnlock = () => { if (G.view === 'playing' && !shopMenu.isOpen() && !phone.isOpen() && !bigMap.isOpen() && photosEl.classList.contains('hidden')) setView('paused'); };   // the store panel frees the mouse without pausing
 $('clicktoplay').addEventListener('click', () => desk.lock());
 
 async function enterVR() {
@@ -787,6 +824,7 @@ function leaveRoom() {
   shopMenu.close(); G.job = null; G.heist = null; G.boss = null; marker.hide(); tut.stop(); audio.stopCarRadio(); cleanupRoom();
 }
 function cleanupRoom() {
+  photocam.setOn(false); closePhotos();
   G.gold = null; if (G.bcam) endBulletCam(); gold.skip();
   if (driving.active) driving.exit();
   G.room = null; G.players.clear(); remote.clear(); npcs.clear(); cars.clear(); voice.closeAll(); G.me.wanted = 0; G.rob = null;
@@ -1339,8 +1377,9 @@ function frame() {
     } else if (canAct) {
       // weapons
       weapons.tryFire(R.trigger > 0.6, R.pressed.trigger);
-      if (R.pressed.a) weapons.reload();
-      if (R.pressed.b) { if (G.ride) net.send({ type: 'exitCar' }); else weapons.cycle(1); }
+      if (photocam.on) { photocam.input(R.trigger > 0.6, performance.now() / 1000, R.pressed.trigger); if (R.pressed.a) photocam.flip(); }
+      else if (R.pressed.a) weapons.reload();
+      if (R.pressed.b) { if (G.ride) net.send({ type: 'exitCar' }); else if (photocam.on) { photocam.setOn(false); camNote('📷 Camera put away'); } else weapons.cycle(1); }
       let prompt = null; G.arrestPrompt = false;
       // arrest: cops grab a wanted player with either hand
       if (isCop()) for (const [side, ctl, st] of [['left', lc, L], ['right', rc, R]]) {
@@ -1456,6 +1495,9 @@ function frame() {
         if (desk.hit('KeyC')) callMyCar();
         if (desk.hit('KeyP')) phone.toggle();
         if (desk.hit('KeyM')) { phone.el.classList.add('hidden'); bigMap.open(); }
+        if (desk.hit('KeyV')) toggleCamera();
+        if (photocam.on) { photocam.input(desk.mouse.left && !driving.active, performance.now() / 1000, desk.mouse.leftPressed && !driving.active); if (desk.hit('KeyF')) photocam.flip(); }
+        if (photocam.on && !G.ew && (desk.hit('Digit1') || desk.hit('Digit2') || desk.hit('Digit3') || desk.hit('KeyQ'))) photocam.setOn(false);
         if (!G.ew && desk.hit('Digit1')) weapons.switchTo(0);
         if (!G.ew && desk.hit('Digit2')) weapons.switchTo(1);
         if (!G.ew && desk.hit('Digit3')) weapons.switchTo(2);
@@ -1465,7 +1507,7 @@ function frame() {
         const eye = camera.getWorldPosition(new THREE.Vector3()), dir = camera.getWorldDirection(new THREE.Vector3());
         const it = G.ride ? null : pickups.aimed(eye, dir, 3);
         let store = null, vault = null;
-        G.prompt = it ? `Press E to pick up ${pickups.label(it)}` : null;
+        G.prompt = it ? `Press E to pick up ${pickups.label(it)}` : photocam.on ? (photocam.recording ? '🔴 Recording · let go of the mouse to stop' : '📷 Click: photo · hold: video · F: selfie · V: put away') : null;
         const perp = isCop() ? arrestTarget(walker.feet.clone().setY(walker.feet.y + walker.height - 0.1), 2.4, false) : null;
         const crook = !perp && isCop() ? crookNear(walker.feet.clone().setY(walker.feet.y + walker.height - 0.1), 2.6) : null;
         if (perp) { G.prompt = `🚔 Press E to ARREST ${perp.info.name}`; if (desk.hit('KeyE')) net.send({ type: 'arrest', id: perp.info.id }); }
@@ -1603,6 +1645,7 @@ function frame() {
     if (!xr) hud.show((G.view === 'playing' || G.view === 'paused') && !cut.active && !G.bcam);
   }
   desk.endFrame();
+  if (photocam.on) { photocam.weapons.vr = xr; photocam.update(dt, performance.now() / 1000); }
   if (xr && goldHeld && weapons.model) gold.renderScope(renderer, scene, weapons.model, camPos, true); // zoomed view on the scope glass
   // automated screenshot tests only: window.__camOverride = { p:[x,y,z], l:[x,y,z] } renders from a free camera
   if (window.__camOverride && !xr) {
@@ -1842,18 +1885,21 @@ function sendState(xr) {
     const seat = cars.seatWorld(c);
     const hpose = xr ? pose(hp, hq) : pose(seat, cq);
     const wheel = (sx) => new THREE.Vector3(sx, -0.3, -0.45).applyQuaternion(cq).add(seat);
-    net.send({ type: 'state', life: G.me.life, h: hpose, l: pose(wheel(-0.18), cq), r: pose(wheel(0.18), cq), vr: xr, car: driving.stateArr() });
+    G.myPose = { h: hpose, l: pose(wheel(-0.18), cq), r: pose(wheel(0.18), cq) };
+    net.send({ type: 'state', life: G.me.life, h: hpose, l: G.myPose.l, r: G.myPose.r, vr: xr, car: driving.stateArr() });
     return;
   }
-  net.send({ type: 'state', life: G.me.life, h: pose(hp, hq), l, r, vr: xr });
+  G.myPose = { h: pose(hp, hq), l, r };
+  net.send({ type: 'state', life: G.me.life, h: G.myPose.h, l, r, vr: xr });
 }
 
 function menuModel() {
-  return { settings, tutorial: tut.active, hasCar: !!(G.garage && G.garage.sel), gang: myGang(), party: G.party && G.party.code ? `${G.party.code} · ${G.party.members.length} in party` : '', missions: G.missions ? `${G.missions.list.filter(q => q.done).length}/3` : '', role: myRole(), mic: G.mic, code: G.room?.code || '', teams: G.room && MODES[G.room.mode].teams, isHost: G.room && G.room.hostId === G.room.you && !G.room.isPublic, mode: G.room?.mode };
+  return { settings, camera: photocam.on, tutorial: tut.active, hasCar: !!(G.garage && G.garage.sel), gang: myGang(), party: G.party && G.party.code ? `${G.party.code} · ${G.party.members.length} in party` : '', missions: G.missions ? `${G.missions.list.filter(q => q.done).length}/3` : '', role: myRole(), mic: G.mic, code: G.room?.code || '', teams: G.room && MODES[G.room.mode].teams, isHost: G.room && G.room.hostId === G.room.you && !G.room.isPublic, mode: G.room?.mode };
 }
 function menuAction(act) {
   if (act === 'tutskip') { tut.skip(); vrui.closeMenu(); }
   else if (act === 'carcall') { callMyCar(); vrui.closeMenu(); }
+  else if (act === 'camera') { toggleCamera(); vrui.closeMenu(); }
   else if (act === 'partyleave') { partyAction('leave'); vrui.closeMenu(); vrui.setNotice('You left the party', 2); }
   else if (act === 'gang') { setGang((myGang() + 1) % GANGS.length); }
   else if (act === 'bug') { sendBug('(reported from VR: no text, check the position and what was going on)'); vrui.closeMenu(); }
@@ -1913,6 +1959,6 @@ async function start() {
   const unlock = () => { audio.unlock(); if (G.view === 'menu' || G.view === 'lobby') audio.startMusic(); };
   window.addEventListener('pointerdown', unlock, { once: false });
   window.addEventListener('keydown', unlock, { once: true });
-  window.__npcMap = npcs.map; window.__cc = { cars, driving, menuAction: (a) => menuAction(a), G, desk, vrui, vrInput, net, walker, vrMover, weapons, remote, renderer, rig, camera, city, map, world, pickups, scene, prison, prisonView, cut, npcs, gold, boosts, shopMenu, bankView, marker, raceView, aptView, turfView, seasonView, phone, dayNight, weather, bigMap, cityMap };
+  window.__npcMap = npcs.map; window.__cc = { cars, driving, menuAction: (a) => menuAction(a), G, desk, vrui, vrInput, net, walker, vrMover, weapons, remote, renderer, rig, camera, city, map, world, pickups, scene, prison, prisonView, cut, npcs, gold, boosts, shopMenu, bankView, marker, raceView, aptView, turfView, seasonView, phone, dayNight, weather, bigMap, cityMap, photocam };
 }
 start();

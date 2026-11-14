@@ -340,3 +340,15 @@ h4.wk { color: #ffd23f; margin-top: 10px; }
 #citymap .cm-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin: 0 4px 0 10px; border: 2px solid #1d1442; vertical-align: -1px; }
 #citymap button { background: #ff4fa3; color: #fff; border: 3px solid #1d1442; border-radius: 12px; padding: 5px 12px; font: 800 14px Trebuchet MS, sans-serif; cursor: pointer; }
 #citymap button[data-x] { background: #1d1442; }
+
+/* 🖼️ photos viewer (phone > Photos) */
+#photos { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 46; width: min(900px, 94vw); max-height: 88vh; overflow: auto; background: #2a1f5f; border: 6px solid #1d1442; border-radius: 26px; padding: 10px 14px; color: #fff; font-weight: 700; box-shadow: 0 12px 40px #000a; }
+#photos.hidden { display: none; }
+#photos .cm-top { display: flex; align-items: center; gap: 12px; padding: 4px 4px 10px; font-size: 13px; }
+#photos .cm-top b { font-size: 20px; color: #ffd23f; } #photos .cm-top span { flex: 1; color: #c9c3ff; }
+#photos .ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+#photos .ph-shot { background: #1d1442; border-radius: 14px; padding: 6px; font-size: 12px; color: #c9c3ff; }
+#photos .ph-shot img { width: 100%; border-radius: 10px; display: block; margin-bottom: 4px; }
+#photos .ph-shot div { display: flex; gap: 6px; margin-top: 4px; }
+#photos button { background: #ff4fa3; color: #fff; border: 3px solid #1d1442; border-radius: 12px; padding: 4px 10px; font: 800 13px Trebuchet MS, sans-serif; cursor: pointer; }
+#photos button[data-x] { background: #1d1442; } #photos .ph-shot button:first-child { flex: 1; }

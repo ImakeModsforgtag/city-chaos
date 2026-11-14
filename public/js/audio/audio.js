@@ -134,6 +134,11 @@ export function playBolt() {
   noise(sfx, t, 0.07, { type: 'bandpass', freq: 2200, q: 5, gain: 0.35 }); noise(sfx, t + 0.22, 0.08, { type: 'bandpass', freq: 3200, q: 5, gain: 0.4 });
   tone(sfx, t + 0.24, 0.04, { type: 'square', freq: 900, to: 1400, gain: 0.08 });
 }
+// 📷 camera shutter
+export function playShutter() { if (!ctx) return; const t = ctx.currentTime; noise(sfx, t, 0.05, { type: 'highpass', freq: 3000, gain: 0.5 }); noise(sfx, t + 0.07, 0.06, { type: 'bandpass', freq: 1800, q: 3, gain: 0.4 }); tone(sfx, t, 0.03, { type: 'square', freq: 2400, gain: 0.05 }); }
+// the game's sound as a MediaStream (for recording video clips with sound)
+let recDest = null;
+export function recordStream() { if (!ctx || !ctx.createMediaStreamDestination) return null; if (!recDest) { recDest = ctx.createMediaStreamDestination(); master.connect(recDest); } return recDest.stream; }
 export function playEmpty() { if (!ctx) return; tone(sfx, ctx.currentTime, 0.04, { type: 'square', freq: 1200, to: 800, gain: 0.1 }); }
 export function playHit(head) {
   if (!ctx) return; const t = ctx.currentTime;

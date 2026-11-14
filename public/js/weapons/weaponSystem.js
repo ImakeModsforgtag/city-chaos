@@ -105,7 +105,7 @@ export class WeaponSystem {
   // returns true if a shot was fired
   tryFire(triggerHeld, triggerPressed) {
     const s = this.current, d = this.def;
-    if (!s || !this.model) return false;
+    if (!s || !this.model || this.holstered) return false;
     const t = this.now();
     if (!(d.auto ? triggerHeld : triggerPressed)) return false;
     if (t < this.nextFire || this.reloading || (this.equipT || 0) > 0.1) return false;
@@ -178,6 +178,7 @@ export class WeaponSystem {
 
   update(dt, moving) {
     if (!this.model) return;
+    this.model.visible = !this.holstered;   // put away while you hold the 📷 camera
     if (this.equipT > 0) this.equipT = Math.max(0, this.equipT - dt);
     animateWeapon(this.model, this.anim, dt, 0);
     if (!this.vr) {

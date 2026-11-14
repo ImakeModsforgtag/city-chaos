@@ -1,7 +1,7 @@
 // CITY CHAOS - the 📱 phone. PC: press P. VR: turn your left wrist toward your face (like checking a watch) and the
 // phone pops up on your wrist: tap an app with your right hand.
 // Shows your cash + savings, level, what you're doing (job / race / heist), today's missions, the weekly challenges,
-// holiday gifts, and five apps: CALL MY CAR, GPS (a beam to any place in the city), RADIO, WAVE and 🗺️ MAP
+// holiday gifts, and the apps (📷 CAMERA + 🖼️ PHOTOS too): CALL MY CAR, GPS (a beam to any place in the city), RADIO, WAVE and 🗺️ MAP
 // (PC: opens the big map, same as M. VR: the wrist screen turns into the city map, tap BACK to return).
 import * as THREE from 'three';
 import { roundRect } from '../engine/geo.js';
@@ -54,12 +54,13 @@ export class Phone {
   toggle() { this.isOpen() ? this.close() : this.open(); }
   render(force) {
     if (!this.isOpen()) return;
-    const d = this.data(), key = JSON.stringify(d) + this.gpsI;
-    if (!force && key === this.pcKey) return; this.pcKey = key;
+    const d = this.data(), key = JSON.stringify({ ...d, time: '' }) + this.gpsI;
+    if (!force && key === this.pcKey) { const tm = this.el.querySelector('.ph-time'); if (tm && tm.textContent !== d.time) tm.textContent = d.time; return; }   // the clock ticks without rebuilding the buttons
+    this.pcKey = key;
     const ms = (d.missions || []).map(m => `<div class="ph-m ${m.done ? 'done' : ''}"><span>${m.done ? '✔ ' : ''}${m.text}</span><b>${m.done ? '' : m.prog + '/' + m.goal}</b></div>`).join('');
     const g = this.gpsTarget();
     this.el.innerHTML = `
-      <div class="ph-top"><span>${d.time}</span><span>📶 CITY CHAOS</span><button data-x>✖</button></div>
+      <div class="ph-top"><span class="ph-time">${d.time}</span><span>📶 CITY CHAOS</span><button data-x>✖</button></div>
       <div class="ph-money"><div><small>CASH</small><b>$${d.cash.toLocaleString()}</b></div><div><small>🏦 SAVINGS</small><b>$${d.bank.toLocaleString()}</b></div><div><small>LEVEL</small><b>⭐ ${d.lvl}</b></div></div>
       <div class="ph-xp"><i style="width:${Math.round(d.frac * 100)}%"></i></div>
       ${d.task ? `<div class="ph-task">${d.task}</div>` : ''}
@@ -72,6 +73,8 @@ export class Phone {
         <button data-app="wave">👋<small>Wave</small></button>
         <button data-app="gps" class="${g ? 'on' : ''}">📍<small>${g ? 'GPS: ' + g.name.split(' ').slice(1).join(' ') : 'GPS off'}</small></button>
         <button data-app="map">🗺️<small>City map (M)</small></button>
+        <button data-app="cam" class="${d.camera ? 'on' : ''}">📷<small>${d.camera ? 'Put camera away' : 'Camera (V)'}</small></button>
+        <button data-app="photos">🖼️<small>Photos</small></button>
       </div>
       <div class="ph-gps">${this.gps.map((p, i) => `<button data-app="gps" data-i="${i}" class="${i === this.gpsI ? 'on' : ''}">${p.name}</button>`).join('')}<button data-app="gps" data-i="-1">✖ off</button></div>
       <small class="ph-hint">P or Esc to put the phone away</small>`;
@@ -131,11 +134,11 @@ export class Phone {
     txt(x, `⭐ WEEK: ${d.weeklyDone}/${d.weeklyTotal}${d.gifts ? `   🎁 ${d.gifts}` : ''}`, 40, y + 8, 24, '#ffd23f'); y += 56;
     // apps
     this.buttons = [];
-    const apps = [['car', '🚗', 'CAR', d.hasCar], ['radio', '📻', d.radio ? d.radio.split(' ')[0] : 'RADIO', d.inCar], ['wave', '👋', 'WAVE', true], ['gps', '📍', g ? g.name.split(' ').slice(1).join(' ').slice(0, 8) : 'GPS', true], ['map', '🗺️', 'MAP', true]];
+    const apps = [['car', '🚗', 'CAR', d.hasCar], ['radio', '📻', d.radio ? d.radio.split(' ')[0] : 'RADIO', d.inCar], ['wave', '👋', 'WAVE', true], ['gps', '📍', g ? g.name.split(' ').slice(1).join(' ').slice(0, 8) : 'GPS', true], ['map', '🗺️', 'MAP', true], ['cam', '📷', d.camera ? 'PUT AWAY' : 'CAMERA', true]];
     const bw = (w - 60 - 2 * 18) / 3, bh = 112;
     apps.forEach(([app, icon, label, on], i) => {
       const bx = 30 + (i % 3) * (bw + 18), by = y + Math.floor(i / 3) * (bh + 18);
-      x.fillStyle = on ? (app === 'gps' && g ? '#8338ec' : '#ff4fa3') : '#4a4560'; roundRect(x, bx, by, bw, bh, 26); x.fill();
+      x.fillStyle = on ? ((app === 'gps' && g) || (app === 'cam' && d.camera) ? '#8338ec' : '#ff4fa3') : '#4a4560'; roundRect(x, bx, by, bw, bh, 26); x.fill();
       txt(x, icon, bx + bw / 2, by + 44, 44, '#fff', 'center'); txt(x, fit(x, label, bw - 12, 20), bx + bw / 2, by + 90, 20, '#fff', 'center');
       this.buttons.push({ app, x: bx, y: by, w: bw, h: bh });
     });
