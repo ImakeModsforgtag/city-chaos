@@ -140,7 +140,10 @@ Your **left wrist** shows health, timer and score. The **gun** shows its ammo.
 | 1 / 2 / 3, mouse wheel, Q | Switch weapon |
 | Tab | Scoreboard |
 | M | 🗺️ Big city map (click to set your GPS) |
-| V | 📷 Camera: click = photo, hold = video, F = selfie |
+| V | 📷 Camera tablet: click = photo, hold = video |
+| T | 🔺 Stand the camera on its tripod (T again picks it up) |
+| E | 👁 Look through the tripod camera / step away |
+| F H J Z | 🔄 front/back camera · ↔ mirror · ↕ upside down · 🔍 zoom |
 | P | 📱 Phone |
 | Esc | Pause menu |
 | Space / Enter | Skip the arrest cutscene |
@@ -518,14 +521,32 @@ All sounds are still made in the browser (no audio files to download), now with 
   - **VR:** look at your wrist phone and tap **🗺️ MAP**: the screen turns into the whole city map with you and your target.
     Tap **◀ BACK** to return to the apps.
 
-## 8-unvicies. 📷 The camera (photos + videos)
+## 8-unvicies. 📷 The camera tablet and its 🔺 tripod (photos + videos)
 
-- **PC:** press **V** to take out the camera (your gun goes away; V again, or 1/2/3/Q, brings the gun back).
-  **Click = photo**, **hold the left mouse button = record a video** (let go to stop, 30 seconds max), **F = selfie**.
-- **VR:** Y menu > **📷 CAMERA**, or tap **📷** on your wrist phone. The camera sits in your right hand with a **live
-  screen on the back** so you can frame the shot. **Tap the trigger = photo**, **hold the trigger = video**, **A = selfie**
-  (turn the camera around to get yourself and your friends in the picture), **B = back to your gun**.
-- In selfie mode **you appear in the picture** with your outfit (and your emotes: dance, then take the selfie).
+A handheld tablet with a live screen and its own buttons: **📸 PHOTO**, **🎥 VIDEO**, **🔄 BACK / FRONT CAM**,
+**🔺 TRIPOD**, **↔ MIRROR**, **↕ UPSIDE DOWN**, **🔍 ZOOM** and **✖ PUT AWAY**.
+
+- **PC:** press **V** to take out the tablet (your gun goes away). The same eight buttons appear at the bottom of the
+  screen with their keys: **click = photo**, **hold the left mouse button = video**, **F** = front / back camera,
+  **H** = mirror, **J** = upside down, **Z** = zoom, **T** = tripod, **V** = put away. Tap **Esc** to free the mouse
+  and click the buttons instead (the game keeps running, it does not pause).
+- **VR:** Y menu > **📷 CAMERA**, or tap **📷** on your wrist phone. The tablet sits in your right hand: **poke its
+  buttons with your other hand**, **tap the trigger = photo**, **hold the trigger = video**, **A** = front / back
+  camera, **B** = back to your gun.
+- **🔄 Back and front camera:** the back camera looks away from you, the front camera looks at you (you appear in the
+  picture with your outfit, and your emotes: dance, then take the shot).
+- **↔ Mirror and ↕ upside down** flip the picture left to right and top to bottom. What you see on the tablet is what
+  gets saved.
+- **🔺 Tripod:** press 🔺 (or **T**) and the camera stands up on a tripod a step or two in front of you, on the ground,
+  already looking back at you.
+  - **You see through it.** On PC the whole screen becomes the camera's view, with dashed lines showing exactly what
+    the photo will cover. In VR the tablet in your hand keeps showing what it sees.
+  - **You aim it.** PC: the mouse. VR: the right thumbstick (snap turn pauses while you aim). **F** / 🔄 spins it
+    around 180 degrees.
+  - **📸 captures** whatever it is pointed at, so you can stand in the shot with your friends. 🎥 records video the
+    same way.
+  - **E** steps away from the camera and back to it again (the tripod stays put and keeps its aim). **T** or ✋ picks
+    it back up. Only you can see your own tripod.
 - Photos are saved as **JPG (1600 x 1200)** and videos as **MP4** (or WEBM if the browser can't do MP4), 640 x 480 at
   24 fps **with the game's sound**, all with a small CITY CHAOS logo in the corner.
 - **Where they go:** a web game can't put files straight into the Quest **Gallery** (only the headset's own capture can).
@@ -707,7 +728,7 @@ city-chaos/
 │   ├── js/net/             networking (network.js) + voice chat (voice.js)
 │   ├── js/player/          avatars, other players (interpolation), NPC visuals
 │   ├── js/ui/              menus, HUD, settings, desktop input, store menus (shopMenu.js), phone.js, citymap.js (minimap + big map)
-│   ├── js/world/           daynight.js (sun, sky, lights), weather.js (rain, storms), photocam.js (📷 camera), races, turf, apartments, holiday event
+│   ├── js/world/           daynight.js (sun, sky, lights), weather.js (rain, storms), photocam.js (📷 camera tablet + tripod), races, turf, apartments, holiday event
 │   ├── js/prison/          prison visuals, arrest cutscene, prison interactions
 │   ├── js/audio/           synthesized sound effects + music
 │   └── vendor/three/       Three.js (bundled, no internet CDN needed)
@@ -723,12 +744,17 @@ city-chaos/
 **Tested and passing:**
 - **Phone (`test/browser/phone_test.py`):** PC: P opens it with your money and missions, the GPS beam, Esc closes it without pausing. Emulated Quest 3: hidden during normal play, shown when you roll your wrist toward your face, tapping WAVE with the right hand sends a wave.
 - **Sound (`test/browser/sound_test.py`):** the radio starting in your own car, N going through all three stations and off, stopping when you get out; new gunshots near and far, explosions and the park / winter ambience with no errors.
-- **Camera (`test/browser/camera_test.py`, `test/browser/quest3_camera_test.py`):** V takes it out and hides the gun, a click
-  saves a 1600 x 1200 JPG that's properly exposed, F flips to selfie (you're in the shot), holding records an MP4 with data,
-  the phone Photos app lists them, Esc closes it, putting it away brings the gun back. On the emulated Quest 3: Y menu >
-  CAMERA puts it in your right hand, the live screen draws, a trigger tap saves a photo from inside VR, A = selfie,
-  holding the trigger records a video, B puts it away. **Not tested on a real headset yet:** how the Quest browser
-  handles a download while you're in VR, and whether its MediaRecorder makes MP4 or WEBM.
+- **Camera (`test/browser/camera_test.py`, `test/browser/camera_tripod_test.py`, `test/browser/quest3_camera_test.py`):** V takes
+  the tablet out and hides the gun, a click saves a 1600 x 1200 JPG that's properly exposed, the front camera puts you in the
+  shot, holding records an MP4 with data, the phone Photos app lists them, putting it away brings the gun back. The tablet
+  test also checks all eight buttons are there and clickable (Esc frees the mouse without pausing), that **mirror and upside
+  down really flip the saved pixels** (compared against the flipped original), zoom, and the tripod: it lands on the ground a
+  step or two in front of you, the lens moves onto it, you see through it, the mouse aims it, you can't walk while looking
+  through it, the capture saves what it sees, E steps away and back, T picks it up. On the emulated Quest 3: the tablet sits
+  in your right hand with its 8 buttons, poking 🔺 with your other hand stands it up, the right stick aims it without spinning
+  you, poking 📸 captures from it, poking ✋ picks it up, trigger tap = photo, hold = video, A and B work. **Not tested on a
+  real headset yet:** how the Quest browser handles a download while you're in VR, and whether its MediaRecorder makes MP4
+  or WEBM.
 - **Living city (`test/server-test-27.mjs`, `test/browser/daynight_test.py`, `test/browser/citymap_test.py`):** the clock
   (wraps after 24 minutes, day/night hours, the weather cycle), pinning the test clock, pedestrians dancing and waving back
   and turning to face you, far away peds ignoring you, gunfire beating a dance, race fans gathering (once), cheering on GO,
