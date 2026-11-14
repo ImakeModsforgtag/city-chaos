@@ -20,9 +20,12 @@ export class HUD {
     this.set('htext', String(hp));
     if (this.cache.hw !== hp) { this.cache.hw = hp; $('hfill').style.width = hp + '%'; $('hfill').classList.toggle('low', hp <= 30); }
     if (st.lvl) { this.set('lvlnum', String(st.lvl.lvl)); this.set('xpfill', Math.round(st.lvl.frac * 100) + '%', 'style.width'); }
+    $('bossbar').classList.toggle('hidden', !st.boss);
+    if (st.boss) { const k = st.boss.line + st.boss.hp; if (this.cache.boss !== k) { this.cache.boss = k; $('bossbar').innerHTML = `${st.boss.line}<div class="bb"><i style="width:${Math.round(100 * st.boss.hp / st.boss.max)}%"></i></div>`; } }
     $('jobline').classList.toggle('hidden', !st.task);
     if (st.task) this.set('jobline', st.task);
     $('missions').classList.toggle('hidden', !st.missions);
+    $('scoreboard').classList.toggle('shift', !!st.missions);   // make room for the missions panel on the left
     if (st.missions) this.set('missions', st.missions, 'innerHTML');
     const ap = Math.round(st.armor || 0);
     this.set('armorbox', ap ? `🛡 <b>${ap}</b>` : '', 'innerHTML');
@@ -84,8 +87,9 @@ export class HUD {
     if (this.cache.board === key) return; this.cache.board = key;
     const head = b.teams ? `<h3 style="text-align:center;margin:0 0 8px"><span style="color:#ff7b8b">RED ${b.teamScores[0]}</span> : <span style="color:#7ba8ff">${b.teamScores[1]} BLUE</span> <small style="opacity:.7">(to ${b.killLimit})</small></h3>`
       : `<h3 style="text-align:center;margin:0 0 8px">FREE FOR ALL <small style="opacity:.7">(first to ${b.killLimit})</small></h3>`;
-    $('scoreboard').innerHTML = head + `<table><tr><th>PLAYER</th><th>TEAM</th><th>ELIMS</th><th>DEATHS</th><th>CASH</th><th></th></tr>` +
-      b.players.map(p => `<tr class="${p.me ? 'me' : ''}"><td><span class="sw" style="background:${p.color}"></span><small style="color:#ffd23f">Lv${p.lvl || 1}</small> ${esc(p.name)}${p.host ? ' 👑' : ''}${p.connected ? '' : ' (away)'}</td><td>${p.team === 0 ? '<span style="color:#ff7b8b">RED</span>' : p.team === 1 ? '<span style="color:#7ba8ff">BLUE</span>' : '-'}</td><td>${p.kills}</td><td>${p.deaths}</td><td>$${p.cash || 0}${p.wanted ? ' <span style="color:#ffd23f">' + '★'.repeat(p.wanted) + '</span>' : ''}</td><td>${p.vr ? '🥽' : '🖱'}</td></tr>`).join('') + '</table>';
+    const turf = b.turf && b.turf.some(n => n) ? `<div style="text-align:center;margin:-4px 0 8px;font-size:13px">🏴 TURF  🔴 ${b.turf[0]} · 🔵 ${b.turf[1]} · 🟢 ${b.turf[2]} · 🟡 ${b.turf[3]}</div>` : '';
+    $('scoreboard').innerHTML = head + turf + `<table><tr><th>PLAYER</th><th>TEAM</th><th>ELIMS</th><th>DEATHS</th><th>CASH</th><th></th></tr>` +
+      b.players.map(p => `<tr class="${p.me ? 'me' : ''}"><td><span class="sw" style="background:${p.color}"></span><small style="color:#ffd23f">Lv${p.lvl || 1}</small> ${p.gang ? ['', '🔴', '🔵', '🟢', '🟡'][p.gang] + ' ' : ''}${esc(p.name)}${p.host ? ' 👑' : ''}${p.connected ? '' : ' (away)'}</td><td>${p.team === 0 ? '<span style="color:#ff7b8b">RED</span>' : p.team === 1 ? '<span style="color:#7ba8ff">BLUE</span>' : '-'}</td><td>${p.kills}</td><td>${p.deaths}</td><td>$${p.cash || 0}${p.wanted ? ' <span style="color:#ffd23f">' + '★'.repeat(p.wanted) + '</span>' : ''}</td><td>${p.vr ? '🥽' : '🖱'}</td></tr>`).join('') + '</table>';
   }
 
   hit(head) {

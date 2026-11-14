@@ -8,7 +8,8 @@ import * as audio from '../audio/audio.js';
 
 const $ = (id) => document.getElementById(id);
 import { unlockLevel } from '/shared/levels.js';
-const CATALOG = { head: HEADS, body: BODIES, hat: HATS, glasses: GLASSES, back: BACKS };
+import { OUTFITS } from '/shared/wardrobe.js';
+const CATALOG = { head: HEADS, body: BODIES, hat: HATS, glasses: GLASSES, back: BACKS, outfit: OUTFITS.map(o => o.name) };
 const SWATCHES = ['#ff9f1c', '#ff3d7f', '#3a86ff', '#2ec27e', '#8338ec', '#ffd23f', '#ff5252', '#00d4d4', '#a0522d', '#f5f5f5', '#333344', '#ff8fd8'];
 
 export class Menu {
@@ -48,6 +49,8 @@ export class Menu {
     // Cop / Civilian pickers (main menu, lobby and pause menu stay in sync)
     document.querySelectorAll('.role-seg').forEach(el => this.seg(el, (v) => { this.setRole(v); this.cb.onRole && this.cb.onRole(v); }));
     this.setRole(profile.role);
+    document.querySelectorAll('.gang-seg').forEach(el => this.seg(el, (v) => { this.setGang(+v); this.cb.onGang && this.cb.onGang(+v); }));
+    this.setGang(0);
     $('create-mode').addEventListener('click', () => {
       const m = this.segVal($('create-mode'));
       const kl = $('create-kills').querySelectorAll('button');
@@ -70,6 +73,18 @@ export class Menu {
     const h = $('role-hint');
     if (h) h.textContent = profile.role === 'cop' ? '👮 You spawn at the police station. Stop robbers, drive police cars, arrest wanted players.' : '🧑 Rob stores and steal cars, but the cops will come for you.';
   }
+  // the PARTY screen
+  setParty(st) {
+    const $$ = (id) => document.getElementById(id);
+    $$('party-none').classList.toggle('hidden', !!st.code); $$('party-in').classList.toggle('hidden', !st.code);
+    $$('party-error').textContent = st.error || '';
+    $$('party-badge').textContent = st.code ? `(${st.members.length})` : '';
+    if (!st.code) return;
+    $$('party-code-show').textContent = st.code;
+    $$('party-list').innerHTML = st.members.map(m => `<li class="${m.online ? '' : 'off'}"><span>${m.leader ? '👑 ' : ''}${String(m.name).replace(/[<>&]/g, '')}</span><small>${!m.online ? 'offline' : m.room ? 'in room ' + m.room : 'in the menu'}</small></li>`).join('');
+    $$('party-tip').textContent = st.leader ? 'You\'re the leader: create or join a room and your party comes with you.' : 'When the leader joins a room, you\'ll go there automatically.';
+  }
+  setGang(g) { document.querySelectorAll('.gang-seg').forEach(el => this.segSet(el, String(g || 0))); }
   segVal(el) { const b = el.querySelector('button.on'); return b ? b.dataset.val : null; }
   segSet(el, v) { el.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.val === String(v))); }
 
@@ -84,6 +99,7 @@ export class Menu {
     if (name === 'join') { $('join-error').textContent = ''; setTimeout(() => $('code-input').focus(), 50); }
     if (name === 'settings') this.syncSettings();
     if (name === 'profile' && this.cb.onProgress) this.cb.onProgress();
+    if (this.onScreen) this.onScreen(name);
   }
   action(a) {
     const cb = this.cb;
@@ -108,11 +124,17 @@ export class Menu {
     if (a === 'bugsend' && cb.onBug) { const el = document.getElementById('bugtext'); if (el.value.trim().length < 4) { document.getElementById('bugmsg').textContent = 'Please describe the bug a little.'; return; } cb.onBug(el.value.trim()); el.value = ''; }
     if (a === 'pause-settings') cb.onPauseGo('settings');
     if (a === 'pause-custom') cb.onPauseGo('custom');
+    if (a === 'pause-party') cb.onPauseGo('party');
+    if (a === 'pause-leaders') cb.onPauseGo('leaders');
+    if (a === 'partyCreate') cb.onParty?.('create');
+    if (a === 'partyJoin') { const c = document.getElementById('party-code').value.trim().toUpperCase(); if (c.length !== 5) { document.getElementById('party-error').textContent = 'Party codes are 5 letters.'; return; } cb.onParty?.('join', c); }
+    if (a === 'partyLeave') cb.onParty?.('leave');
+    if (a === 'partyCopy') cb.onParty?.('copy');
     if (a === 'randomize') {
       const c = profile.cos;
       c.color = SWATCHES[Math.floor(Math.random() * SWATCHES.length)];
       c.accent = SWATCHES[Math.floor(Math.random() * SWATCHES.length)];
-      for (const k of Object.keys(CATALOG)) c[k] = Math.floor(Math.random() * CATALOG[k].length);
+      for (const k of Object.keys(CATALOG)) if (k !== 'outfit') c[k] = Math.floor(Math.random() * CATALOG[k].length);
       this.cosChanged();
     }
   }
@@ -203,7 +225,9 @@ export class Menu {
     // items you haven't unlocked yet: you can try them on here, but in games they show as the default until you reach the level
     const lvl = this.cb.level ? this.cb.level() : 99;
     document.querySelectorAll('.cycler').forEach(cy => {
-      const key = cy.dataset.key, idx = profile.cos[key], need = unlockLevel(key, idx), b = cy.querySelector('b');
+      const key = cy.dataset.key, idx = profile.cos[key] | 0, b = cy.querySelector('b');
+      if (key === 'outfit') { const own = !idx || (this.cb.wardrobe ? this.cb.wardrobe() : []).includes(idx); b.textContent = CATALOG.outfit[idx] + (own ? '' : OUTFITS[idx].exclusive ? ` 🎁 from ${OUTFITS[idx].exclusive}` : ` 🛒 $${OUTFITS[idx].price} at THREADS`); b.classList.toggle('locked', !own); return; }
+      const need = unlockLevel(key, idx);
       b.textContent = CATALOG[key][idx] + (need > lvl ? ` 🔒 Lv ${need}` : '');
       b.classList.toggle('locked', need > lvl);
     });

@@ -163,6 +163,7 @@ export class VehicleManager {
     if (!car || !p.alive || !p.pose || p.inCar || p.ride) return;
     if (car.van && car.driver !== DRIVER.PLAYER && !(p.jail && p.jail.items.has('VANKEYS'))) return this.room.sendTo(p, { type: 'pMsg', text: 'The prison van is locked. You need the 🔑 VAN KEYS.' }); // (friends can still hop in once it's moving)
     if (p.holding || (p.jail && !car.van)) return;
+    if (car.owner && car.owner !== p.id && car.driver !== DRIVER.PLAYER) { const o = this.room.players.get(car.owner); return this.room.sendTo(p, { type: 'pMsg', text: `🔒 That's ${o ? o.name : 'someone'}'s car. Only the owner can drive it (you can ride along when they do).` }); }
     const [hx, hy, hz] = p.pose.h;
     if (Math.hypot(hx - car.x, hz - car.z) > HIJACK_RANGE || Math.abs(hy - car.y) > 3.5) return;
     if (car.driver === DRIVER.PLAYER) {
@@ -186,7 +187,7 @@ export class VehicleManager {
       if (p.role !== 'cop') this.room.npcs.addWanted(p, 1, 'carjacking'); // cops can commandeer cars
       this.room.npcs.noise(car.x, car.z, 18);
     }
-    if (car.driver === DRIVER.NPC) this.room.saves.stat(p, 'cars');
+    if (car.driver === DRIVER.NPC && !car.owner) this.room.saves.stat(p, 'cars');
     car.driver = DRIVER.PLAYER; car.pid = p.id; car.speed = 0; car.emptySince = 0;
     p.inCar = car.id;
     car.hits = new Map();
@@ -283,6 +284,12 @@ export class VehicleManager {
         continue;
       }
       if (car.route) { this.driveRoute(car, dt, t); continue; }
+      if (car.owner) {
+        // a personal car: stays parked where you left it; goes away a minute after you leave the game
+        const o = this.room.players.get(car.owner);
+        if (!o || car.ownerGoneAt) { if (!car.ownerGoneAt) car.ownerGoneAt = t; if (t - car.ownerGoneAt > 60) car.remove = true; }
+        continue;
+      }
       if (car.temp && car.driver === DRIVER.NONE) {
         const near = [...this.room.players.values()].some(p => p.pose && Math.hypot(p.pose.h[0] - car.x, p.pose.h[2] - car.z) < 30);
         if (!near && t - car.emptySince > 40) car.remove = true;
@@ -324,11 +331,33 @@ export class VehicleManager {
       if (car.crook) { const n = this.room.npcs.list.find(q => q.id === car.crook); if (n) this.room.npcs.crooks.seat(n, car); }
     }
   }
+  // the nearest free street spot (on a traffic lane, pointing the way traffic goes) within range of x,z
+  parkingSpot(x, z, range) {
+    let best = null, bd = range;
+    for (const loop of this.loops) for (const g of loop.segs) {
+      const ax = g.a[0], az = g.a[1], dx = g.b[0] - ax, dz = g.b[1] - az, L2 = dx * dx + dz * dz || 1;
+      const k = Math.max(0.1, Math.min(0.9, ((x - ax) * dx + (z - az) * dz) / L2));
+      for (const kk of [k, Math.max(0.1, k - 0.15), Math.min(0.9, k + 0.15)]) {
+        const px = ax + dx * kk, pz = az + dz * kk, d = Math.hypot(px - x, pz - z);
+        if (d >= bd) continue;
+        if (this.cars.some(c => !c.remove && Math.hypot(c.x - px, c.z - pz) < 6)) continue;
+        bd = d; best = [px, 0.15, pz, Math.atan2(-dx, -dz)];
+      }
+    }
+    return best;
+  }
+  spawnPersonal(p, color, spot) {
+    const [x, y, z, yaw] = spot;
+    const car = { id: this.nextId++, color, owner: p.id, x, y, z, yaw, speed: 0, driver: DRIVER.NONE, pid: 0, siren: false, emptySince: this.room.now(), hits: new Map(), lastHonk: 0, waitSince: 0, pushUntil: 0 };
+    this.cars.push(car);
+    this.room.broadcast({ type: 'carCalled', id: car.id, owner: p.id, car: this.carArr(car) });
+    return car;
+  }
   sendHome(car) { this.ejectRiders(car); this.sendHomeRaw(car); }
   sendHomeRaw(car) { const [hx, hy, hz, hyaw] = car.home; Object.assign(car, { x: hx, y: hy, z: hz, yaw: hyaw, speed: 0, siren: false, driver: DRIVER.NONE, pid: 0 }); }
   cleanup() { for (const c of this.cars) if (c.remove) this.ejectRiders(c); this.cars = this.cars.filter(c => !c.remove); }
   loopYaw(car) { const loop = this.loops[car.loop]; const seg = loop.segs.find(g => car.s >= g.start && car.s < g.start + g.len) || loop.segs[0]; return Math.atan2(-(seg.b[0] - seg.a[0]), -(seg.b[1] - seg.a[1])); }
 
-  carArr(c) { return [c.id, r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.speed), c.driver, c.pid || 0, c.color, c.police ? 1 : 0, c.siren ? 1 : 0, c.crook ? 1 : 0]; }
+  carArr(c) { return [c.id, r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.speed), c.driver, c.pid || 0, c.color, c.police ? 1 : 0, c.siren ? 1 : 0, c.crook ? 1 : 0, c.owner || 0]; }
   snapshot() { return this.cars.map(c => this.carArr(c)); }
 }

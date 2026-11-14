@@ -102,8 +102,13 @@ export class VRUI {
     const items = [
       { label: '▶  RESUME', color: '#2ec27e', act: 'resume' },
       ...(m.tutorial ? [{ label: '⏭  SKIP TUTORIAL', color: '#00b4d8', act: 'tutskip' }] : []),
+      ...(m.hasCar ? [{ label: '🚗  CALL MY CAR', color: '#ff4fa3', act: 'carcall' }] : []),
+      ...(m.party ? [{ label: `🎉 PARTY ${m.party} (click to leave)`, color: '#8338ec', act: 'partyleave' }] : []),
+      { label: m.gang ? `GANG: ${['', '🔴 RED FANGS', '🔵 BLUE SHARKS', '🟢 GREEN VIPERS', '🟡 GOLD CROWNS'][m.gang]} (click: next)` : 'GANG: NONE (click to join one)', color: ['#555a70', '#ff3b4e', '#3a86ff', '#2ec27e', '#c9a227'][m.gang || 0], act: 'gang' },
       { label: m.role === 'cop' ? 'ROLE: 👮 COP (click to be a civilian)' : 'ROLE: 🧑 CIVILIAN (click to be a cop)', color: m.role === 'cop' ? '#1f3a93' : '#ff9f1c', act: 'role' },
       ...(m.missions ? [{ label: `📋  DAILY MISSIONS (${m.missions})`, color: '#2ec27e', act: 'missions' }] : []),
+      { label: '😀  EMOTES', color: '#ff9f1c', act: 'emotes' },
+      { label: '🏆  LEADERBOARDS', color: '#c9a227', act: 'leaders' },
       { label: `MOVEMENT: ${s.moveMode === 'gorilla' ? 'GORILLA ARMS' : s.moveMode === 'both' ? 'ARMS + STICK' : 'JOYSTICK'}`, color: '#3a86ff', act: 'move' },
       { label: `BODY SIZE: ${s.vrSize === 'human' ? 'HUMAN (REAL HEIGHT)' : s.vrSize === 'small' ? 'SMALL (STANDING)' : 'GORILLA (GORILLA TAG)'}`, color: '#2ec27e', act: 'size' },
       { label: 'STAND TALL + CLICK: RECALIBRATE', color: '#2ec27e', act: 'calibrate' },

@@ -23,6 +23,8 @@ export const MISSION_POOL = [
   { id: 'boost', ev: 'boost', n: [1, 3], text: 'Buy {n} speed or jump boost{s}', cash: 40, xp: 20 },
   { id: 'armor', ev: 'armor', n: [1, 1], text: 'Buy body armor', cash: 120, xp: 60 },
   { id: 'jobs', ev: 'jobs', n: [1, 3], text: 'Finish {n} job{s} (delivery or taxi)', cash: 100, xp: 60 },
+  { id: 'race', ev: 'race', n: [1, 2], text: 'Finish {n} street race{s} (🏁 start line by the gas station)', cash: 120, xp: 70 },
+  { id: 'turf', ev: 'turf', n: [1, 2], text: 'Take over {n} gang turf{s} (pick a gang in the pause menu)', cash: 120, xp: 70 },
   { id: 'deposit', ev: 'deposit', n: [200, 800], step: 100, text: 'Put ${n} in the CITY BANK', cash: 0.2, xp: 0.1 }
 ];
 // the top of the Chaos Tower (roof of the highest tier, x/z box + height)
@@ -60,3 +62,45 @@ export function missionsFor(day) {
   return out;
 }
 export function fmtReset(sec) { const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60; return h ? `${h}h ${m}m` : `${m}m`; }
+
+// ---------------------------------------------------------------- weekly challenges
+// Every Monday (midnight Pacific) everyone gets the same 4 bigger challenges for the week. Finish all 4 for a big bonus
+// and a ⭐ weekly star on your apartment trophy shelf.
+export const WEEKLY_COUNT = 4;
+export const WEEKLY_BONUS = { cash: 1000, xp: 500 };
+export const WEEKLY_POOL = [
+  { id: 'wkills', ev: 'kills', n: [20, 40], step: 5, text: 'Take down {n} players', cash: 15, xp: 10 },
+  { id: 'wcrooks', ev: 'crooks', n: [6, 12], step: 2, text: 'Stop {n} NPC robbers', cash: 50, xp: 30 },
+  { id: 'wjobs', ev: 'jobs', n: [8, 15], text: 'Finish {n} jobs (delivery or taxi)', cash: 40, xp: 25 },
+  { id: 'wraces', ev: 'race', n: [4, 8], text: 'Finish {n} street races', cash: 60, xp: 35 },
+  { id: 'wracewin', ev: 'raceWin', n: [2, 4], text: 'Win {n} street races (or beat the target time)', cash: 150, xp: 80 },
+  { id: 'wturf', ev: 'turf', n: [5, 10], text: 'Take over {n} gang turf zones', cash: 60, xp: 35 },
+  { id: 'wheist', ev: 'heist', n: [1, 3], text: 'Get away with {n} CITY BANK heist{s}', cash: 300, xp: 150 },
+  { id: 'wboss', ev: 'boss', n: [1, 3], text: 'Take down {n} BOSS CREW member{s}', cash: 250, xp: 120 },
+  { id: 'wearn', ev: 'earn', n: [4000, 8000], step: 1000, text: 'Earn ${n} cash', cash: 0.15, xp: 0.08 },
+  { id: 'wminutes', ev: 'minutes', n: [60, 120], step: 15, text: 'Play for {n} minutes', cash: 5, xp: 3 },
+  { id: 'wcars', ev: 'cars', n: [10, 20], step: 5, text: 'Hijack {n} cars', cash: 20, xp: 12 },
+  { id: 'wdaily', ev: 'mission', n: [6, 12], step: 3, text: 'Complete {n} daily missions', cash: 60, xp: 40 },
+  { id: 'wheadshots', ev: 'headshots', n: [10, 20], step: 5, text: 'Land {n} headshot takedowns', cash: 25, xp: 15 }
+];
+// 'YYYY-MM-DD' of the Monday that starts this week (Pacific)
+export function weekKey(ms = Date.now()) {
+  const d = new Date(dayKey(ms) + 'T12:00:00Z'), dow = (d.getUTCDay() + 6) % 7;   // Monday = 0
+  return new Date(d.getTime() - dow * 864e5).toISOString().slice(0, 10);
+}
+export function secondsToWeekReset(ms = Date.now()) {
+  const d = new Date(dayKey(ms) + 'T12:00:00Z'), dow = (d.getUTCDay() + 6) % 7;
+  return secondsToReset(ms) + (6 - dow) * 86400;
+}
+export function weekliesFor(week) {
+  const r = rng('cc-weekly-' + week), pool = WEEKLY_POOL.slice(), out = [];
+  while (out.length < WEEKLY_COUNT && pool.length) {
+    const m = pool.splice(Math.floor(r() * pool.length), 1)[0];
+    if (m.id === 'wracewin' && out.some(o => o.id === 'wraces')) continue;
+    if (m.id === 'wraces' && out.some(o => o.id === 'wracewin')) continue;
+    const step = m.step || 1;
+    const goal = Math.round((m.n[0] + Math.floor(r() * ((m.n[1] - m.n[0]) / step + 1)) * step) / step) * step;
+    out.push({ id: m.id, ev: m.ev, goal, text: m.text.replace('{n}', goal).replace(/\{s\}/g, goal === 1 ? '' : 's'), cash: Math.max(100, Math.round(m.cash * goal / 50) * 50), xp: Math.max(50, Math.round(m.xp * goal / 10) * 10) });
+  }
+  return out;
+}

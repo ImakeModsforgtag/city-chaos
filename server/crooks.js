@@ -1,3 +1,4 @@
+import { isNight } from '../public/shared/daynight.js';
 // CITY CHAOS - NPC bad guys (server). Masked robbers show up around the city every so often and either
 //   * walk into a store, pull a gun on the clerk, empty the register and run for it, or
 //   * walk up to a car waiting in traffic, throw the driver out and speed off in it.
@@ -20,6 +21,13 @@ export const CROOK = {
   arrestPay: 250,         // cop player arrests one
   driveTime: 45,          // seconds a car thief joyrides before vanishing into traffic
   dmgPlayer: 7, dmgCop: 10
+};
+// the rare BOSS CREW: an armored boss + 2 guards hit a store for a big score. Everyone gets the alert.
+export const BOSS = {
+  firstDelay: [240, 360], every: [480, 720],   // seconds (4-6 min after the first player joins, then every 8-12 min)
+  hp: 450, guardHp: 180, robTime: 20, loot: [1500, 2500],
+  bounty: 800, guardBounty: 250, crewBonus: 300,   // + crewBonus to whoever drops the last one
+  dmg: 8, fire: [0.8, 1.4], sight: 18, xp: 150
 };
 const HEAD_H = 1.55;
 const r2 = (v) => Math.round(v * 100) / 100;
@@ -65,10 +73,51 @@ export class Crooks {
     const players = [...this.room.players.values()].filter(p => p.connected && p.pose && !p.jail);
     if (!players.length) { this.nextAt = null; return; }
     if (this.nextAt === null) this.nextAt = t + rand(...CROOK.firstDelay);
+    if (this.bossAt === undefined || this.bossAt === null) this.bossAt = t + rand(...BOSS.firstDelay);
+    if (t >= this.bossAt) { this.bossAt = t + rand(...BOSS.every); if (!this.crew()) this.startBoss(t); }
+    if (this.crew() && t - (this.bossSent || 0) > 1) { this.bossSent = t; this.room.broadcast(this.bossMsg()); }
     if (t >= this.nextAt) {
-      this.nextAt = t + rand(...CROOK.every);
-      if (this.list().length < CROOK.max) (Math.random() < 0.55 ? this.startRobbery(t) || this.startCarTheft(t) : this.startCarTheft(t) || this.startRobbery(t));
+      // more robbers come out at night (sooner, and one more at a time)
+      const night = this.room.hour && isNight(this.room.hour());
+      this.nextAt = t + rand(...CROOK.every) * (night ? 0.55 : 1);
+      if (this.list().filter(n => !n.boss && !n.guard).length < CROOK.max + (night ? 1 : 0)) (Math.random() < 0.55 ? this.startRobbery(t) || this.startCarTheft(t) : this.startCarTheft(t) || this.startRobbery(t));
     }
+  }
+
+  // ---------------------------------------------------------------- the BOSS CREW
+  crew() { const c = this.list().filter(n => n.boss || n.guard); return c.length ? c : null; }
+  bossMsg() {
+    const c = this.crew() || [];
+    const b = c.find(n => n.boss);
+    return { type: 'boss', ev: 'state', shop: this.bossShop, hp: b ? Math.max(0, Math.round(b.hp)) : 0, max: BOSS.hp, guards: c.filter(n => n.guard).length,
+             phase: b ? b.phase : 'gone', loot: b ? b.loot || 0 : 0, id: b ? b.id : 0 };
+  }
+  startBoss(t, shopName = null) {
+    const n = this.startRobbery(t, shopName, { boss: 1, hp: BOSS.hp, maxHp: BOSS.hp });
+    if (!n) return null;
+    const r = this.routes.get(n.shop);
+    this.bossShop = n.shop; this.crewDown = 0;
+    const guards = [];
+    for (const side of [-1, 1]) {
+      // guards come in behind the boss and stand watch by the door
+      const g = this.newCrook(r.spawn[0] + side * 1.2, r.spawn[1] + side * 0.6, 'rob', { shop: n.shop, clerk: n.clerk, guard: n.id, hp: BOSS.guardHp, maxHp: BOSS.guardHp,
+        path: r.path.slice(0, -1).map(p => [p[0] + side * 0.8, p[1] + side * 0.4]) });
+      guards.push(g);
+    }
+    this.room.broadcast({ type: 'npcSay', id: n.id, text: '👑 THIS IS A ROBBERY! NOBODY MOVE!' });
+    this.room.broadcast({ type: 'boss', ev: 'start', shop: n.shop, id: n.id, guards: guards.map(g => g.id), x: r2(n.x), z: r2(n.z) });
+    for (const q of this.room.players.values()) if (q.role === 'cop') this.room.sendTo(q, { type: 'robAlert', shop: n.shop, by: -1, x: r2(n.x), z: r2(n.z), crook: 1, boss: 1 });
+    return n;
+  }
+  guardBrain(n, dt, t) {
+    const boss = this.npcs.list.find(q => q.id === n.guard);
+    if (n.phase === 'go') { if (this.follow(n, dt, t, 1.9)) n.phase = 'watch'; }
+    else if (n.phase === 'watch') {
+      n.state = NPC_STATE.AIM;
+      const r = this.routes.get(n.shop); if (r) n.yaw = Math.atan2(-(r.door.nx), -(r.door.nz));
+    } else if (this.follow(n, dt, t, 4.0)) this.escaped(n, t);
+    // the boss is done (or down): the guards run for it too
+    if ((n.phase === 'go' || n.phase === 'watch') && (!boss || boss.state === NPC_STATE.DEAD || boss.remove || boss.phase === 'flee' || boss.phase === 'away')) this.runAway(n, t, true);
   }
 
   newCrook(x, z, job, extra = {}) {
@@ -79,7 +128,7 @@ export class Crooks {
     return n;
   }
 
-  startRobbery(t, shopName = null) {
+  startRobbery(t, shopName = null, extra = {}) {
     const taken = new Set(this.list().map(c => c.shop));
     const shops = this.npcs.list.filter(n => n.type === NPC_TYPE.SHOP && n.state !== NPC_STATE.DEAD && !n.rob && t >= n.closedUntil && !taken.has(n.shop) && this.routes.has(n.shop)
       && (!shopName || n.shop === shopName)
@@ -87,7 +136,7 @@ export class Crooks {
     if (!shops.length) return null;
     const clerk = shops[Math.floor(Math.random() * shops.length)];
     const r = this.routes.get(clerk.shop);
-    return this.newCrook(r.spawn[0], r.spawn[1], 'rob', { shop: clerk.shop, clerk: clerk.id, path: r.path.map(p => [...p]) });
+    return this.newCrook(r.spawn[0], r.spawn[1], 'rob', { shop: clerk.shop, clerk: clerk.id, path: r.path.map(p => [...p]), ...extra });
   }
 
   // a car stopped at a red light (or any NPC car if none are), not a police car, not already targeted
@@ -126,6 +175,7 @@ export class Crooks {
       if (n.phase === 'flee' || n.phase === 'away') this.follow(n, dt, t, 3.4);
       return;
     }
+    if (n.guard) return this.guardBrain(n, dt, t);
     if (n.job === 'rob') return this.robber(n, dt, t);
     return this.carThief(n, dt, t);
   }
@@ -159,8 +209,8 @@ export class Crooks {
       n.state = NPC_STATE.AIM; n.yaw = Math.atan2(-(clerk.x - n.x), -(clerk.z - n.z));
       clerk.rob = { crook: n.id, pid: -1, progress: t - n.robStart, last: t };
       clerk.state = NPC_STATE.HANDSUP; clerk.yaw = Math.atan2(-(n.x - clerk.x), -(n.z - clerk.z));
-      if (t - n.robStart >= CROOK.robTime) {
-        n.loot = 150 + Math.floor(Math.random() * 300);
+      if (t - n.robStart >= (n.boss ? BOSS.robTime : CROOK.robTime)) {
+        n.loot = n.boss ? Math.round(rand(...BOSS.loot) / 10) * 10 : 150 + Math.floor(Math.random() * 300);
         clerk.rob = null; clerk.closedUntil = t + 75;
         this.room.broadcast({ type: 'crook', ev: 'robbed', id: n.id, shop: n.shop, cash: n.loot, x: r2(n.x), z: r2(n.z) });
         return this.runAway(n, t, true);
@@ -240,6 +290,7 @@ export class Crooks {
     if (near && t - n.born < 150) return this.runAway(n, t, n.phase === 'flee');
     n.remove = true;
     if (n.loot) this.room.broadcast({ type: 'crook', ev: 'escaped', id: n.id, cash: n.loot });
+    if ((n.boss || n.guard) && !this.list().some(q => q !== n && (q.boss || q.guard) && !q.remove && q.state !== NPC_STATE.DEAD)) this.bossOver('escaped');
   }
 
   alert(n, clerk) {
@@ -270,6 +321,8 @@ export class Crooks {
     }
     for (const c of this.npcs.list) if (c.type === NPC_TYPE.COP && c.crook === n.id && c.state !== NPC_STATE.DEAD) cands.push({ kind: 'n', ref: c, x: c.x, y: c.y + HEAD_H, z: c.z });
     // cop players close by while he's on the job
+    // the boss crew shoots at anyone who comes close (and anyone who shoots them)
+    if (n.boss || n.guard) for (const p of this.room.players.values()) if (p.alive && p.pose && !p.jail && !p.inCar && Math.hypot(p.pose.h[0] - n.x, p.pose.h[2] - n.z) < BOSS.sight) cands.push({ kind: 'p', ref: p, x: p.pose.h[0], y: p.pose.h[1], z: p.pose.h[2] });
     if (n.phase !== 'go') for (const p of this.room.players.values()) if (p.role === 'cop' && p.alive && p.pose && !p.inCar && Math.hypot(p.pose.h[0] - n.x, p.pose.h[2] - n.z) < 14) cands.push({ kind: 'p', ref: p, x: p.pose.h[0], y: p.pose.h[1], z: p.pose.h[2] });
     let best = null, bd = 26;
     for (const c of cands) {
@@ -281,23 +334,24 @@ export class Crooks {
     return best;
   }
   shoot(n, foe, t) {
-    n.nextShot = t + rand(0.9, 1.6);
+    const crew = n.boss || n.guard;
+    n.nextShot = t + (crew ? rand(...BOSS.fire) : rand(0.9, 1.6));
     const hx = n.x, hy = n.y + HEAD_H, hz = n.z, d = Math.hypot(foe.x - hx, foe.y - hy, foe.z - hz);
     const hit = Math.random() < Math.max(0.15, 0.5 - d * 0.012);
     const ex = foe.x + (hit ? 0 : rand(-1, 1)), ey = foe.y - (hit ? 0.4 : rand(0, 1.2)), ez = foe.z + (hit ? 0 : rand(-1, 1));
     this.room.broadcast({ type: 'npcShot', id: n.id, o: [r2(hx), r2(hy - 0.35), r2(hz)], e: [r2(ex), r2(ey), r2(ez)], crook: 1 });
     this.npcs.noise(hx, hz, 20);
     if (!hit) return;
-    if (foe.kind === 'p') this.room.damage(foe.ref, null, CROOK.dmgPlayer, 'robber', false, [hx, hy, hz]);
-    else this.npcs.damage(foe.ref, null, CROOK.dmgCop, false, 'robber');
+    if (foe.kind === 'p') this.room.damage(foe.ref, null, crew ? BOSS.dmg : CROOK.dmgPlayer, 'robber', false, [hx, hy, hz]);
+    else this.npcs.damage(foe.ref, null, crew ? BOSS.dmg : CROOK.dmgCop, false, 'robber');
   }
 
   // a robber got hurt (by a player, a cop or a car)
   onHurt(n, attacker, t) {
     if (attacker) n.aggro = { kind: 'p', id: attacker.id, t };
-    if (n.phase === 'go' && n.job === 'rob' && n.hp < n.maxHp) this.runAway(n, t, true);   // spooked before the job: run
+    if (n.phase === 'go' && n.job === 'rob' && n.hp < n.maxHp && !n.boss && !n.guard) this.runAway(n, t, true);   // spooked before the job: run (the boss crew doesn't spook)
     // badly hurt with police close: give up
-    if (n.hp < 30 && !n.car && !n.surrender) {
+    if (n.hp < 30 && !n.car && !n.surrender && !n.boss) {
       const copNear = this.npcs.list.some(c => c.type === NPC_TYPE.COP && c.state !== NPC_STATE.DEAD && Math.hypot(c.x - n.x, c.z - n.z) < 10)
         || [...this.room.players.values()].some(p => p.role === 'cop' && p.alive && p.pose && Math.hypot(p.pose.h[0] - n.x, p.pose.h[2] - n.z) < 10);
       if (copNear) { n.surrender = t; n.state = NPC_STATE.HANDSUP; this.room.broadcast({ type: 'npcSay', id: n.id, text: "OK OK! DON'T SHOOT! I GIVE UP!" }); }
@@ -313,8 +367,17 @@ export class Crooks {
       n.car = null;
     }
     for (const car of this.room.vehicles.cars) if (car.crookTarget && n.carTarget === car.id) car.crookTarget = false;
-    if (!attacker) { this.room.broadcast({ type: 'crook', ev: 'down', id: n.id }); return; }
-    const pay = (attacker.role === 'cop' ? CROOK.bounty * 2 : CROOK.bounty) + (n.loot || 0);
+    const crew = n.boss || n.guard;
+    const last = crew && !this.list().some(q => q !== n && (q.boss || q.guard) && q.state !== NPC_STATE.DEAD && !q.remove);
+    if (crew) this.room.broadcast({ type: 'boss', ev: 'down', id: n.id, boss: n.boss ? 1 : 0, by: attacker ? attacker.id : 0, last: last ? 1 : 0 });
+    if (!attacker) { this.room.broadcast({ type: 'crook', ev: 'down', id: n.id }); if (last) this.bossOver('down'); return; }
+    let pay = (attacker.role === 'cop' ? CROOK.bounty * 2 : CROOK.bounty) + (n.loot || 0);
+    if (crew) {
+      pay = (n.boss ? BOSS.bounty : BOSS.guardBounty) + (n.loot || 0) + (last ? BOSS.crewBonus : 0);
+      if (n.boss) { this.room.saves.addXP(attacker, BOSS.xp, 'boss'); this.room.saves.stat(attacker, 'bosses'); }
+      if (this.room.saves) this.room.saves.event(attacker, 'boss');
+    }
+    if (last) this.bossOver('down', attacker);
     attacker.cash = (attacker.cash || 0) + pay;
     this.room.saves.stat(attacker, 'crooks');
     this.room.sendTo(attacker, { type: 'crook', ev: 'bounty', id: n.id, cash: pay, loot: n.loot || 0, total: attacker.cash });
@@ -326,15 +389,23 @@ export class Crooks {
     const n = this.npcs.list.find(q => q.id === id && q.type === NPC_TYPE.CROOK);
     if (!n || n.state === NPC_STATE.DEAD || n.car || p.role !== 'cop' || !p.alive || !p.pose || p.jail || p.inCar) return;
     if (Math.hypot(p.pose.h[0] - n.x, p.pose.h[2] - n.z) > 3.2 || Math.abs(p.pose.h[1] - (n.y + HEAD_H)) > 2.2) return;
+    if ((n.boss || n.guard) && n.hp > n.maxHp * 0.3) return this.room.sendTo(p, { type: 'pMsg', text: '👑 The boss crew is too tough to cuff. Wear them down first (below 30% health)!' });
     this.arrest(n, p);
+  }
+  bossOver(why, by) {
+    this.room.broadcast({ type: 'boss', ev: 'over', why, by: by ? by.id : 0, shop: this.bossShop });
+    this.bossShop = null;
   }
   arrest(n, p) {
     const clerk = this.npcs.list.find(q => q.id === n.clerk);
     if (clerk && clerk.rob && clerk.rob.crook === n.id) clerk.rob = null;
     for (const car of this.room.vehicles.cars) if (n.carTarget === car.id) car.crookTarget = false;
     n.remove = true;
+    const crew = n.boss || n.guard, last = crew && !this.list().some(q => q !== n && (q.boss || q.guard) && q.state !== NPC_STATE.DEAD && !q.remove);
+    if (crew) { this.room.broadcast({ type: 'boss', ev: 'down', id: n.id, boss: n.boss ? 1 : 0, by: p ? p.id : 0, last: last ? 1 : 0, arrest: 1 }); if (last) this.bossOver('down', p); }
     if (p) {
-      const pay = CROOK.arrestPay + (n.loot || 0);
+      const pay = (crew ? (n.boss ? BOSS.bounty : BOSS.guardBounty) + (last ? BOSS.crewBonus : 0) : CROOK.arrestPay) + (n.loot || 0);
+      if (n.boss) this.room.saves.addXP(p, BOSS.xp, 'boss');
       p.cash = (p.cash || 0) + pay;
       this.room.saves.stat(p, 'crooks', 1, 'crookArrest');
       this.room.sendTo(p, { type: 'crook', ev: 'bounty', id: n.id, cash: pay, loot: n.loot || 0, total: p.cash, arrest: 1 });

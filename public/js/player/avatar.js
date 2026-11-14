@@ -87,6 +87,20 @@ export class Avatar {
       default: B.add(mesh(G.dodec, skin, 0, -0.62, 0, 0.29, 0.33, 0.25));
     }
     B.add(mesh(G.box, cos.cop || cos.guard ? black : cos.prisoner ? orange : acc, 0, -0.8, 0, 0.42, 0.06, 0.3)); // belt/accent band
+    // 👕 outfits from THREADS (hidden under prison / guard / police uniforms)
+    if (!cos.prisoner && !cos.guard && !cos.cop && (cos.outfit | 0)) {
+      const bw = [0.5, 0.36, 0.6, 0.48][cos.body | 0] || 0.5, bd = [0.4, 0.3, 0.5, 0.34][cos.body | 0] || 0.4, fz = -bd / 2 - 0.006;
+      const top = (c, h = 0.5, y = -0.58) => B.add(mesh(G.box, c, 0, y, 0, bw, h, bd));
+      switch (cos.outfit | 0) {
+        case 1: top(acc, 0.56); B.add(mesh(G.half, acc, 0, -0.33, 0.1, 0.2, 0.16, 0.16, Math.PI / 2.4)); B.add(mesh(G.box, darker, 0, -0.72, fz, bw * 0.55, 0.12, 0.02)); break;           // hoodie (+ hood + pocket)
+        case 2: top(L(0xff8f00), 0.5); for (const [dx, dy] of [[-0.12, -0.45], [0.1, -0.55], [-0.05, -0.7], [0.14, -0.78], [-0.15, -0.62]]) B.add(mesh(G.sphere, L(0xff4fa3), dx, dy, fz - 0.005, 0.035, 0.035, 0.01)); B.add(mesh(G.box, L(0xfff3e0), 0, -0.38, fz - 0.004, 0.12, 0.08, 0.01)); break; // hawaiian shirt
+        case 3: top(acc, 0.56); for (const sx of [-1, 1]) B.add(mesh(G.box, white, sx * (bw / 2 + 0.004), -0.58, 0, 0.012, 0.52, 0.06)); B.add(mesh(G.box, white, 0, -0.58, fz - 0.004, 0.025, 0.52, 0.01)); break; // track suit
+        case 4: top(black, 0.56); B.add(mesh(G.box, white, 0, -0.5, fz - 0.004, 0.14, 0.32, 0.01)); B.add(mesh(G.box, L(0xd62828), 0, -0.38, fz - 0.012, 0.11, 0.045, 0.02)); break; // tuxedo + bow tie
+        case 5: top(L(0x1e40af), 0.58); B.add(mesh(G.sphere, gold, 0, -0.5, fz - 0.006, 0.075, 0.075, 0.015)); B.add(mesh(G.box, L(0xd62828), 0, -0.68, bd / 2 + 0.02, bw * 0.9, 0.62, 0.02, 0.1)); B.add(mesh(G.box, L(0xd62828), 0, -0.82, 0, bw + 0.01, 0.06, bd + 0.01)); break; // hero suit + cape
+        case 7: top(L(0xd62828), 0.58); B.add(mesh(G.box, white, 0, -0.84, 0, bw + 0.02, 0.07, bd + 0.02)); B.add(mesh(G.box, white, 0, -0.58, fz - 0.004, 0.06, 0.5, 0.01)); B.add(mesh(G.box, black, 0, -0.78, 0, bw + 0.03, 0.05, bd + 0.03)); B.add(mesh(G.box, gold, 0, -0.78, fz - 0.02, 0.07, 0.06, 0.01)); break; // santa suit + belt
+        case 6: top(gold, 0.56); B.add(mesh(G.torus, gold, 0, -0.42, fz - 0.02, 0.13, 0.13, 0.13)); B.add(mesh(G.box, black, 0, -0.6, fz - 0.004, 0.03, 0.44, 0.01)); break; // gold drip
+      }
+    }
     if (cos.prisoner) { // orange prison jumpsuit over your body + a number patch
       B.add(mesh(G.box, orange, 0, -0.62, 0, 0.5, 0.62, 0.42));
       B.add(mesh(G.box, white, 0, -0.5, -0.215, 0.16, 0.08, 0.02));
@@ -151,6 +165,37 @@ export class Avatar {
   }
 
   // pose arrays: [x,y,z,qx,qy,qz,qw]
+  // emotes: an emoji bubble + a little move on top of the pose (VR players' real hands are left alone for most)
+  playEmote(e, icon) {
+    this.emote = { e, t0: performance.now() / 1000 };
+    if (this.emoteBubble) { this.root.remove(this.emoteBubble); this.emoteBubble.material.map.dispose(); }
+    const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(64, 64, 60, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#1d1442'; g.lineWidth = 6; g.stroke(); g.font = '84px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(icon, 64, 64);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    this.emoteBubble = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true }));
+    this.emoteBubble.scale.set(0.55, 0.55, 1); this.emoteBubble.renderOrder = 6; this.root.add(this.emoteBubble);
+  }
+  emoteTick() {
+    const E = this.emote; if (!E) return;
+    let t = performance.now() / 1000 - E.t0; if (E.hold) t = 0.6 + (t % 1);   // (hold: tests / screenshots)
+    const hp = this.head.position;
+    if (this.emoteBubble) { this.emoteBubble.position.set(hp.x, hp.y + 0.95 + Math.sin(t * 5) * 0.03, hp.z); this.emoteBubble.material.opacity = Math.min(1, 2.6 - t); }
+    if (t > 2.6) { this.emote = null; if (this.emoteBubble) { this.root.remove(this.emoteBubble); this.emoteBubble.material.map.dispose(); this.emoteBubble = null; } this.body.rotation.y = this.bodyYaw; return; }
+    const yaw = this.bodyYaw, rx = Math.cos(yaw), rz = -Math.sin(yaw), fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    const k = Math.min(1, t * 4, (2.6 - t) * 4);
+    const hand = (h, side, up, fwd, wob) => { h.position.set(hp.x + rx * side + fx * fwd + wob * rx, hp.y + up, hp.z + rz * side + fz * fwd + wob * rz); };
+    if (this.isVR && E.e !== 2) return;   // VR players move their real hands (dance still spins them)
+    switch (E.e) {
+      case 0: hand(this.rh, 0.32, 0.25 * k, 0.05, Math.sin(t * 14) * 0.12 * k); break;                           // wave
+      case 1: this.body.position.y += Math.abs(Math.sin(t * 16)) * 0.05; break;                                   // laugh
+      case 2: this.body.rotation.y = yaw + t * 7; this.body.position.y += Math.abs(Math.sin(t * 9)) * 0.08; hand(this.lh, -0.35, 0.2 * Math.sin(t * 9), 0.1, 0); hand(this.rh, 0.35, 0.2 * Math.cos(t * 9), 0.1, 0); break; // dance
+      case 3: hand(this.rh, 0.25, -0.15 + 0.1 * k, 0.35, 0); break;                                              // thumbs up
+      case 4: this.body.position.y += Math.sin(t * 30) * 0.015; hand(this.lh, -0.25, -0.35, 0.25, Math.sin(t * 20) * 0.03); hand(this.rh, 0.25, -0.35, 0.25, -Math.sin(t * 20) * 0.03); break; // angry shake
+      case 5: hand(this.lh, -0.1, -0.4, 0.22, 0); hand(this.rh, 0.1, -0.4, 0.22, 0); break;                       // love: hands on heart
+      case 6: { const a = Math.floor(t * 6) % 2; hand(this.lh, -0.14, -0.42, a ? 0.12 : 0.3, 0); hand(this.rh, 0.14, -0.42, a ? 0.3 : 0.12, 0); break; } // gorilla chest beat
+      case 7: hand(this.rh, 0.15, -0.3, 0.45 + Math.sin(t * 10) * 0.05 * k, 0); break;                           // GG handshake
+    }
+  }
   setPose(h, l, r, dt) {
     this.head.position.set(h[0], h[1], h[2]); this.head.quaternion.set(h[3], h[4], h[5], h[6]);
     this.lh.position.set(l[0], l[1], l[2]); this.lh.quaternion.set(l[3], l[4], l[5], l[6]);

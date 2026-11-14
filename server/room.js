@@ -11,6 +11,12 @@ import { onShopBuy, soakArmor } from './shops.js';
 import { Saves } from './profiles.js';
 import { addReport } from './bugs.js';
 import { CityBank } from './bank.js';
+import { Garage } from './garage.js';
+import { Races } from './races.js';
+import { Turf } from './turf.js';
+import { Apartments } from './apartments.js';
+import { Season } from './season.js';
+import { gameHour, weatherAt, isNight } from '../public/shared/daynight.js';
 import { Jobs } from './jobs.js';
 import { BANK } from '../public/shared/economy.js';
 import { lockCos } from '../public/shared/levels.js';
@@ -42,7 +48,7 @@ function sanitizeCos(c) {
   const int = (v, max) => clamp(Math.floor(Number(v) || 0), 0, max);
   const color = (v) => /^#[0-9a-fA-F]{6}$/.test(v) ? v : '#ff9f1c';
   return { color: color(c.color), accent: color(c.accent || '#ffffff'), head: int(c.head, 3), body: int(c.body, 3),
-           hat: int(c.hat, 6), glasses: int(c.glasses, 4), back: int(c.back, 4) };
+           hat: int(c.hat, 6), glasses: int(c.glasses, 4), back: int(c.back, 4), outfit: int(c.outfit, 7) };
 }
 
 export class Room {
@@ -72,6 +78,11 @@ export class Room {
     this.gold = new GoldenSniper(this, MAP);
     this.saves = new Saves(this);   // saved progress (cash + lifetime stats)
     this.bank = new CityBank(this, MAP);   // savings accounts + the vault heist
+    this.garage = new Garage(this);        // your own cars (CAR LOT + calling your car)
+    this.races = new Races(this);          // street races (🏁 start line by the gas station)
+    this.turf = new Turf(this);            // gang turf zones
+    this.apts = new Apartments(this);      // apartments (safe zone + trophy shelf)
+    this.season = new Season(this);        // holiday event (snow + gifts)
     this.jobs = new Jobs(this, MAP);       // delivery + taxi jobs
     this.npcAcc = 0; this.snapCount = 0;
   }
@@ -125,6 +136,9 @@ export class Room {
     if (p.job) this.jobs.end(p, 'quit', true);
     this.saves.save(p, true);   // last save before leaving (if still connected)
     this.vehicles.playerGone(p);
+    this.garage.playerGone(p);
+    this.races.playerGone(p);
+    p.apt = -1;
     this.prison.playerGone(p);
     this.players.delete(id);
     this.gold.playerGone(id);
@@ -142,10 +156,16 @@ export class Room {
     return a <= b ? 0 : 1;
   }
 
+  // the city clock + weather (see shared/daynight.js); tests can pin the hour / weather
+  clockMsg() { return { type: 'clock', ms: Date.now(), fixed: this.fixedHour ?? null, weather: this.fixedWeather || null }; }
+  hour() { return this.fixedHour ?? gameHour(Date.now()); }
+  weather() { return this.fixedWeather || (this.season && this.season.on ? 'clear' : weatherAt(Date.now())); }
+  // outfits you haven't bought show as no outfit
+  ownCos(c, p) { if (c.outfit && !(p.prof && (p.prof.wardrobe || []).includes(c.outfit))) c.outfit = 0; return c; }
   publicPlayer(p) {
     return { id: p.id, name: p.name, cos: p.cos, team: p.team, hp: p.hp, alive: p.alive, kills: p.kills,
              deaths: p.deaths, connected: p.connected, vr: p.vr, host: p.id === this.hostId, cash: p.cash || 0, wanted: p.wanted || 0, role: p.role || 'civilian',
-             jail: p.jail ? (p.jail.state === 'cut' ? 1 : p.jail.disguise ? 3 : 2) : 0, lvl: p.lvl || 1 };
+             jail: p.jail ? (p.jail.state === 'cut' ? 1 : p.jail.disguise ? 3 : 2) : 0, lvl: p.lvl || 1, gang: p.gang || 0 };
   }
 
   fullState(p) {
@@ -180,7 +200,7 @@ export class Room {
       case 'switch': return this.onSwitch(p, msg);
       case 'pickup': return this.onPickup(p, msg);
       case 'cosmetics':
-        p.cos = lockCos(sanitizeCos(msg.cos), p.lvl || 1); if (msg.name) p.name = sanitizeName(msg.name);
+        p.cos = this.ownCos(lockCos(sanitizeCos(msg.cos), p.lvl || 1), p); if (msg.name) p.name = sanitizeName(msg.name);
         return this.broadcast({ type: 'playerUpdate', p: this.publicPlayer(p) });
       case 'settings': return this.onSettings(p, msg);
       case 'rob': return this.npcs.onRob(p, Math.floor(Number(msg.id)));
@@ -208,8 +228,19 @@ export class Room {
       case 'heist': return msg.a === 'grab' ? this.bank.onGrab(p, msg.i) : this.bank.onDrill(p);
       case 'bugReport': if (addReport('bug', p, this, msg)) this.sendTo(p, { type: 'bugThanks' }); return;
       case 'clientError': addReport('error', p, this, msg); return;
+      case 'gift': return this.season.open(p, msg.id);
+      case 'testClock': if (process.env.CC_TEST === '1') { this.fixedHour = msg.hour === null || msg.hour === undefined ? null : +msg.hour; this.fixedWeather = msg.weather || null; this.broadcast(this.clockMsg()); } return;
+      case 'testSeason': if (process.env.CC_TEST === '1') this.season.set(!!msg.on); return;
+      case 'aptLeave': return this.apts.leave(p);
+      case 'aptRest': return this.apts.rest(p);
+      case 'emote': { const e = Math.floor(Number(msg.e)); const t = this.now(); if (!(e >= 0 && e < 8) || !p.alive || t - (p.emoteAt || -9) < 1.1) return; p.emoteAt = t; this.broadcast({ type: 'emote', id: p.id, e }); this.npcs.emote(p, e); return; }
+      case 'setGang': return this.turf.setGang(p, msg.g);
+      case 'carCall': { const r = this.garage.call(p); return this.sendTo(p, { type: 'carCallResult', ...r }); }
       case 'tutorial': return this.saves.tutorial(p, msg.a === 'done' ? 'done' : 'skip');
       case 'jobQuit': if (p.job) this.jobs.end(p, 'quit'); return;
+      case 'testBoss': // automated tests only: start the boss crew now
+        if (process.env.CC_TEST === '1') this.npcs.crooks.startBoss(this.now(), msg.shop ? String(msg.shop) : null);
+        return;
       case 'testNoCops': // automated browser tests only: no NPC police in this room
         if (process.env.CC_TEST === '1') { this.npcs.noCops = true; for (const n of this.npcs.list) if (n.type === 2) n.remove = true; for (const c of this.vehicles.cars) if (c.temp) c.remove = true; }
         return;
@@ -469,6 +500,7 @@ export class Room {
   }
 
   damage(q, attacker, amount, w, head, from) {
+    if (this.apts && this.apts.safe(q)) return;   // nobody gets hurt at home
     if (!q.alive || amount <= 0) return;
     if (q.protectUntil > now()) return;
     if ((q.jail && q.jail.state === 'cut') || q.holding) return;
@@ -663,6 +695,7 @@ export class Room {
     this.gold.tick();
     this.saves.tick(dt);
     this.bank.tick(dt);
+    this.raceTick = (this.raceTick || 0) + dt; if (this.raceTick >= 0.1) { this.races.tick(this.raceTick); this.turf.tick(this.raceTick); this.apts.tick(); this.raceTick = 0; }
     this.jobTick = (this.jobTick || 0) + dt; if (this.jobTick > 0.25) { this.jobTick = 0; this.jobs.tick(); }
     this.npcAcc += dt;
     if (this.npcAcc >= 0.1) { const d = Math.min(0.25, this.npcAcc); this.npcs.tick(d); this.vehicles.tick(d); this.prison.tick(d); this.npcAcc = 0; }

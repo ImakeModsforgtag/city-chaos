@@ -2,7 +2,7 @@
 // Works in Meta Quest Browser once the user has tapped/clicked anything (unlock()).
 import { settings, onSettings } from '../ui/settings.js';
 
-let ctx = null, master, sfx, music, voiceBus, noiseBuf, ambience = null, musicTimer = null;
+let ctx = null, master, sfx, music, voiceBus, noiseBuf, ambience = null, musicTimer = null, echo = null, radioBus = null, carRadio = null;
 const listenerPos = { x: 0, y: 0, z: 0 };
 
 export function audioCtx() { return ctx; }
@@ -18,6 +18,12 @@ export function unlock() {
     sfx = ctx.createGain(); sfx.connect(comp); comp.connect(master);
     music = ctx.createGain(); music.connect(master);
     voiceBus = ctx.createGain(); voiceBus.connect(master);
+    // a short city "slap back" echo for gunshots and explosions (buildings bouncing the sound back)
+    echo = ctx.createDelay(1); echo.delayTime.value = 0.14;
+    const fb = ctx.createGain(); fb.gain.value = 0.28; const ef = ctx.createBiquadFilter(); ef.type = 'lowpass'; ef.frequency.value = 1400;
+    echo.connect(ef); ef.connect(fb); fb.connect(echo); ef.connect(sfx);
+    // the car radio: through a small "car speaker" filter
+    radioBus = ctx.createGain(); const rf = ctx.createBiquadFilter(); rf.type = 'peaking'; rf.frequency.value = 900; rf.gain.value = 4; radioBus.connect(rf); rf.connect(music);
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 1.5, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -54,7 +60,9 @@ function out(pos, maxDist = 120) {
   const p = ctx.createPanner();
   p.panningModel = 'equalpower'; p.distanceModel = 'inverse'; p.refDistance = 4; p.rolloffFactor = 1.2; p.maxDistance = maxDist;
   if (p.positionX) { p.positionX.value = pos.x; p.positionY.value = pos.y; p.positionZ.value = pos.z; } else p.setPosition(pos.x, pos.y, pos.z);
-  p.connect(sfx);
+  // far away sounds lose their highs (like real gunfire across a city)
+  if (d > 25) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = Math.max(700, 9000 - d * 70); p.connect(f); f.connect(sfx); }
+  else p.connect(sfx);
   return p;
 }
 export function makePanner() {
@@ -95,6 +103,10 @@ const GUN = {
 export function playShot(w, pos) {
   if (!ctx) return; const d = out(pos, 200); if (!d) return;
   const t = ctx.currentTime, r = GUN[w] || GUN.pistol;
+  // body thump you feel up close + a mechanical click, then the city echo
+  if (!pos) { tone(sfx, t, 0.09, { type: 'sine', freq: 70, to: 38, gain: (r.th[3] || 0.5) * 0.9 }); noise(sfx, t + 0.015, 0.025, { type: 'bandpass', freq: 6000, q: 3, gain: 0.12 }); }
+  const es = ctx.createGain(); es.gain.value = pos ? 0.35 : 0.45;
+  noise(es, t, r.n[0] * 0.8, { freq: r.n[1] * 0.6, gain: r.n[2] * 0.6, sweepTo: 250 }); es.connect(echo);
   noise(d, t, r.n[0], { freq: r.n[1], gain: r.n[2], sweepTo: 300 });
   tone(d, t, r.th[2], { type: 'triangle', freq: r.th[0], to: r.th[1], gain: r.th[3] });
   if (r.crack) noise(d, t, 0.03, { type: 'highpass', freq: 5000, gain: r.crack });
@@ -140,6 +152,7 @@ export function playDeath(pos) {
   tone(d, t + 0.05, 0.25, { type: 'square', freq: 880, to: 1760, gain: 0.08 }); // cartoony "pop"
 }
 export function playExplosion(pos) {
+  if (ctx && echo) { const es = ctx.createGain(); es.gain.value = 0.5; es.connect(echo); noise(es, ctx.currentTime, 1.0, { freq: 500, gain: 0.8, sweepTo: 80 }); }
   if (!ctx) return; const d = out(pos, 250); if (!d) return; const t = ctx.currentTime;
   noise(d, t, 1.4, { freq: 900, gain: 1.0, sweepTo: 80, attack: 0.005 });
   tone(d, t, 0.8, { type: 'sine', freq: 70, to: 25, gain: 1.0 });
@@ -233,6 +246,10 @@ export function startAmbience() {
     if (!ctx) return; const t = ctx.currentTime, r = Math.random();
     const far = { x: listenerPos.x + (Math.random() - 0.5) * 120, y: 3, z: listenerPos.z + (Math.random() - 0.5) * 120 };
     const d = out(far, 400); if (!d) return;
+    const park = AMB.parkAt && AMB.parkAt(listenerPos.x, listenerPos.z), down = AMB.downtownAt && AMB.downtownAt(listenerPos.x, listenerPos.z);
+    if (AMB.winter && r < 0.18) { [1568, 1760, 1568, 1319].forEach((f, i) => tone(d, t + i * 0.16, 0.12, { type: 'triangle', freq: f, gain: 0.035 })); return; }   // sleigh bells
+    if (park && r < 0.75) { for (let i = 0; i < 3 + Math.floor(Math.random() * 3); i++) tone(d, t + i * 0.11, 0.08, { type: 'sine', freq: 2600 + Math.random() * 1400, to: 3800, gain: 0.05 }); return; }   // park: lots of birds
+    if (down && r < 0.5) { noise(d, t, 1.6, { type: 'bandpass', freq: 220, q: 0.8, gain: 0.14, attack: 0.5 }); if (Math.random() < 0.4) tone(d, t + 0.4, 0.3, { type: 'square', freq: 440, gain: 0.06 }); return; }   // downtown: traffic + honks
     if (r < 0.3) { tone(d, t, 0.35, { type: 'square', freq: 392, gain: 0.08 }); tone(d, t, 0.35, { type: 'square', freq: 494, gain: 0.06 }); } // car horn
     else if (r < 0.65) { for (let i = 0; i < 3; i++) tone(d, t + i * 0.12, 0.08, { type: 'sine', freq: 2800 + Math.random() * 900, to: 3600, gain: 0.05 }); } // birds
     else if (r < 0.8) { const s = ctx.createOscillator(); s.type = 'sine'; const sg = ctx.createGain(); sg.gain.value = 0.0001; s.connect(sg); sg.connect(d);
@@ -240,12 +257,20 @@ export function startAmbience() {
       sg.gain.exponentialRampToValueAtTime(0.03, t + 0.3); sg.gain.exponentialRampToValueAtTime(0.0001, t + 2.1); s.start(t); s.stop(t + 2.2); } // siren
     else noise(d, t, 2.5, { type: 'bandpass', freq: 300, q: 1, gain: 0.12, attack: 0.8 }); // passing car
   }, 3500);
-  ambience = { src, g, extras };
+  // winter wind (holiday event)
+  const wsrc = ctx.createBufferSource(); wsrc.buffer = noiseBuf; wsrc.loop = true; wsrc.playbackRate.value = 0.5;
+  const wf = ctx.createBiquadFilter(); wf.type = 'bandpass'; wf.frequency.value = 500; wf.Q.value = 0.6;
+  const wg = ctx.createGain(); wg.gain.value = AMB.winter ? 0.05 : 0;
+  wsrc.connect(wf); wf.connect(wg); wg.connect(sfx); wsrc.start();
+  const gust = setInterval(() => { if (!ctx) return; const t = ctx.currentTime; wf.frequency.setTargetAtTime(350 + Math.random() * 500, t, 1.5); wg.gain.setTargetAtTime(AMB.winter ? 0.03 + Math.random() * 0.05 : 0, t, 1.2); }, 2000);
+  ambience = { src, g, extras, wsrc, gust };
 }
+// where you are (set by main: park / downtown) and the season, so the city sounds like the place you're in
+export const AMB = { parkAt: null, downtownAt: null, winter: false };
 export function stopAmbience() {
   if (!ambience) return;
-  try { ambience.src.stop(); } catch {}
-  clearInterval(ambience.extras); ambience = null;
+  try { ambience.src.stop(); ambience.wsrc.stop(); } catch {}
+  clearInterval(ambience.extras); clearInterval(ambience.gust); ambience = null;
 }
 
 // ---------------------------------------------------------------- menu music (tiny step sequencer)
@@ -318,3 +343,60 @@ export function radio(text, { pitch = 0.85, rate = 1.05 } = {}) {
   } catch {}
 }
 export function stopRadio() { try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch {} }
+
+// ---------------------------------------------------------------- 📻 car radio: three synth stations
+export const STATIONS = [
+  { name: 'CHAOS FM', bpm: 118, chords: [[60, 64, 67], [55, 59, 62], [57, 60, 64], [53, 57, 60]], mel: [72, 74, 76, 0, 79, 76, 74, 0, 72, 0, 74, 76, 74, 72, 69, 0], lead: 'square', kick: [0, 4], snare: [2, 6], hat: 1 },
+  { name: 'LO-FI 88', bpm: 82, chords: [[62, 65, 69, 72], [60, 64, 67, 71], [57, 60, 64, 67], [59, 62, 65, 69]], mel: [74, 0, 72, 0, 69, 0, 0, 67, 69, 0, 72, 0, 0, 0, 74, 0], lead: 'triangle', kick: [0, 5], snare: [4], hat: 2 },
+  { name: 'BASS 101', bpm: 140, chords: [[57, 60, 64], [57, 60, 64], [53, 57, 60], [55, 59, 62]], mel: [69, 0, 69, 72, 0, 69, 0, 67, 69, 0, 0, 76, 0, 74, 72, 0], lead: 'sawtooth', kick: [0, 2, 4, 6], snare: [4], hat: 1, wobble: true }
+];
+export function carRadioOn() { return !!carRadio; }
+export function carRadioStation() { return carRadio ? STATIONS[carRadio.i].name : null; }
+export function startCarRadio(i = 0) {
+  if (!ctx) return;
+  stopCarRadio();
+  const st = STATIONS[i % STATIONS.length], step = 60 / st.bpm / 2;
+  let n = 0, next = ctx.currentTime + 0.15;
+  const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  const timer = setInterval(() => {
+    while (next < ctx.currentTime + 0.25) {
+      const bar = Math.floor(n / 8) % 4, s = n % 8, ch = st.chords[bar];
+      if (s === 0) ch.forEach(m => tone(radioBus, next, step * 7.5, { type: 'triangle', freq: mtof(m), gain: 0.04, attack: 0.03 }));
+      if (st.kick.includes(s)) tone(radioBus, next, 0.16, { type: 'sine', freq: 120, to: 42, gain: 0.4 });
+      if (st.snare.includes(s)) noise(radioBus, next, 0.13, { type: 'bandpass', freq: 1700, q: 1, gain: 0.22 });
+      if (s % st.hat === 0) noise(radioBus, next + step / 2, 0.04, { type: 'highpass', freq: 7500, gain: 0.07 });
+      const bassF = mtof(ch[0] - 24 + (s % 4 === 3 ? 7 : 0));
+      if (st.wobble) { const o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter(); o.type = 'sawtooth'; o.frequency.value = bassF; f.type = 'lowpass'; f.frequency.setValueAtTime(200, next); f.frequency.linearRampToValueAtTime(1400, next + step / 2); f.frequency.linearRampToValueAtTime(200, next + step); g.gain.setValueAtTime(0.0001, next); g.gain.exponentialRampToValueAtTime(0.09, next + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, next + step); o.connect(f); f.connect(g); g.connect(radioBus); o.start(next); o.stop(next + step + 0.05); }
+      else tone(radioBus, next, step * 0.9, { type: 'square', freq: bassF, gain: 0.045 });
+      const m = st.mel[n % 16]; if (m && bar % 2 === 0) tone(radioBus, next, step * 0.85, { type: st.lead, freq: mtof(m), gain: 0.03 });
+      next += step; n++;
+    }
+  }, 50);
+  carRadio = { i: i % STATIONS.length, timer };
+  // station jingle
+  const t = ctx.currentTime; [880, 1108, 1318].forEach((f, k) => tone(radioBus, t + k * 0.07, 0.12, { type: 'sine', freq: f, gain: 0.06 }));
+}
+export function stopCarRadio() { if (carRadio) { clearInterval(carRadio.timer); carRadio = null; } }
+// next station, then off, then the first station again
+export function nextStation() { if (!carRadio) { startCarRadio(0); return STATIONS[0].name; } if (carRadio.i >= STATIONS.length - 1) { stopCarRadio(); return null; } startCarRadio(carRadio.i + 1); return STATIONS[carRadio.i].name; }
+
+// ---------------------------------------------------------------- 🌧 rain + ⛈ thunder
+let rainSrc = null, rainGain = null;
+export function setRain(level) {
+  if (!ctx) return;
+  if (!rainSrc && level > 0.02) {
+    rainSrc = ctx.createBufferSource(); rainSrc.buffer = noiseBuf; rainSrc.loop = true;
+    const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 900; const f2 = ctx.createBiquadFilter(); f2.type = 'lowpass'; f2.frequency.value = 6000;
+    rainGain = ctx.createGain(); rainGain.gain.value = 0;
+    rainSrc.connect(f); f.connect(f2); f2.connect(rainGain); rainGain.connect(sfx); rainSrc.start();
+  }
+  if (rainGain) rainGain.gain.setTargetAtTime(Math.max(0, level) * 0.16, ctx.currentTime, 0.5);
+  if (rainSrc && level <= 0.02 && rainGain.gain.value < 0.005) { try { rainSrc.stop(); } catch {} rainSrc = null; rainGain = null; }
+}
+export function playThunder() {
+  if (!ctx) return; const t = ctx.currentTime;
+  noise(sfx, t, 0.35, { type: 'lowpass', freq: 2200, gain: 0.35, sweepTo: 400 });                       // the crack
+  noise(sfx, t + 0.15, 3.2, { type: 'lowpass', freq: 260, gain: 0.55, attack: 0.25, sweepTo: 70 });      // the long rumble
+  tone(sfx, t + 0.1, 2.4, { type: 'sine', freq: 48, to: 32, gain: 0.25, attack: 0.3 });
+  if (echo) { const es = ctx.createGain(); es.gain.value = 0.4; es.connect(echo); noise(es, t + 0.3, 1.6, { type: 'lowpass', freq: 300, gain: 0.4 }); }
+}

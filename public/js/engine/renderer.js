@@ -86,7 +86,7 @@ function buildSky() {
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
   const sky = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
-  sky.renderOrder = -10;
+  sky.renderOrder = -10; sky.name = 'skyDome';
   const grp = new THREE.Group(); grp.add(sky);
   // sun disc with a soft halo
   const sunDisc = new THREE.Mesh(new THREE.CircleGeometry(20, 24), new THREE.MeshBasicMaterial({ color: 0xfff6c8, fog: false }));

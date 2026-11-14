@@ -24,6 +24,7 @@ const PALETTE = {
 };
 
 import { buildPrison } from './prison.js';
+import { UNITS as APT_UNITS, APT } from './apartment.js';
 import { BLOCK_DISTRICT, SIGNALS, rng } from './cityKit.js';
 
 // block edges that get no mid-block street lamp (a driveway / car exit crosses the curb there)
@@ -38,7 +39,7 @@ export function buildMap() {
   const spawns = [];     // player spawn points  { p:[x,y,z], team:-1|0|1 }
   const labels = [];     // signs { text, p:[x,y,z], rotY, color }
   const policeLot = [], copSpawns = [], policeExit = [];
-  let bank = null, jobBoard = null;   // CITY BANK (vault heist) + the JOB BOARD kiosk
+  let bank = null, jobBoard = null, carLot = null, carShow = [], threads = null, mannequins = [], aptDoor = null;   // CITY BANK (vault heist) + the JOB BOARD kiosk
   let holding = null;   // police station holding cells (short arrests, under 3 stars)
   const shops = [];      // robbable stores { name, keeper:[x,y,z], yaw } (yaw 0 = facing -Z)
   const buildings = [];  // every building, so the client can add facades (windows, frames, storefronts, roofs)
@@ -569,6 +570,12 @@ export function buildMap() {
     // the plaza kiosk is the JOB BOARD now
     labels.push({ text: '💼 JOBS', p: [x + 24, 2.2, z + 7.06], rotY: 0, color: '#ffffff', bg: '#1565c0' });
     jobBoard = [x + 24, Y, z + 8.6];
+    // 👕 THREADS clothing counter (east side of the plaza) + three mannequins showing outfits
+    box(x + 38.5, Y, z + 15, x + 39.5, Y + 1.15, z + 17, 0xf5f0e6);
+    box(x + 39.5, Y, z + 14.4, x + 39.8, Y + 3.0, z + 17.6, 0xe91e63);
+    labels.push({ text: '👕 THREADS', p: [x + 39.48, 2.3, z + 16], rotY: -Math.PI / 2, color: '#ffffff', bg: '#e91e63' });
+    threads = [x + 37.9, Y, z + 16];
+    for (const [i, mx] of [[4, 35], [5, 38], [6, 41]]) { box(x + mx - 0.5, Y, z + 11, x + mx + 0.5, Y + 0.12, z + 12, 0xe0e0e0); hbox(x + mx - 0.3, Y + 0.12, z + 11.2, x + mx + 0.3, Y + 1.9, z + 11.8); mannequins.push({ outfit: i, p: [x + mx, Y + 0.12, z + 11.5], yaw: Math.PI / 2 }); }
   }
 
   // (1,3) Gas station
@@ -591,6 +598,16 @@ export function buildMap() {
     pickup('health', null, x + 34, 1.0, z + 37);
     car(x + 12, Y, z + 30, 1);
     spawns.push({ p: [x + 16, Y, z + 36], team: -1 });
+    // 🚗 CAR LOT: a kiosk + four show cars on glowing pads (buy one, then call it with C / the VR menu)
+    box(x + 4.4, Y, z + 30.4, x + 5.4, Y + 2.6, z + 31.6, 0x263238);
+    box(x + 4.35, Y + 2.6, z + 30.2, x + 5.6, Y + 2.75, z + 31.8, 0xffd23f);
+    labels.push({ text: '🚗 CAR LOT', p: [x + 5.42, 2.0, z + 31], rotY: Math.PI / 2, color: '#ffffff', bg: '#e53935' });
+    carLot = [x + 6.0, Y, z + 31];
+    for (const [i, px] of [[0, 9], [1, 14.5], [2, 20], [3, 25.5]]) {
+      box(px + x - 1.5, Y, z + 38.4, px + x + 1.5, Y + 0.08, z + 43.6, 0x37474f, false);
+      hbox(x + px - 1.0, Y + 0.25, z + 38.9, x + px + 1.0, Y + 1.7, z + 43.1);
+      carShow.push({ model: i, p: [x + px, Y + 0.08, z + 41], yaw: 0 });
+    }
   }
 
   // (2,0) Basketball court
@@ -763,6 +780,11 @@ export function buildMap() {
   // (3,2) Apartments C
   {
     const { x, z } = B(3, 2);
+    // 🏠 APARTMENTS: an elevator door on the PINK PALMS wall (go home / buy an apartment)
+    box(x + 20, Y, z + 3.82, x + 22.4, Y + 2.7, z + 3.98, 0xb0bec5);
+    box(x + 21.15, Y + 0.05, z + 3.8, x + 21.25, Y + 2.6, z + 3.84, 0x546e7a);
+    labels.push({ text: '🏠 APARTMENTS', p: [x + 21.2, 3.1, z + 3.78], rotY: Math.PI, color: '#ffffff', bg: '#6a1b9a' });
+    aptDoor = { keeper: [x + 21.2, Y, z + 2.9], out: [x + 21.2, Y, z + 1.6, 0] };
     const a = hollow(x + 4, z + 4, 22, 16, { floors: 3, fh: 3.2, color: PALETTE.apt3, trim: 0xfff0f5, roofAccess: true,
       doors: [{ side: 'n', at: 9, width: 3 }, { side: 'e', at: 6, width: 2.4 }], sign: 'PINK PALMS', signPos: [x + 15, 3.0, z + 3.95], signRot: Math.PI, signBg: '#880e4f' });
     pickup('weapon', 'pistol', x + 20, 1.0, z + 10);
@@ -912,6 +934,21 @@ export function buildMap() {
   // (streets are kept clear for NPC traffic; see server/vehicles.js)
 
   // Traffic lanes (right-hand traffic, 3m from each road's center line). Rectangle loops of road center lines.
+  // apartment rooms (sealed boxes under the city, see shared/apartment.js)
+  for (const u of APT_UNITS) {
+    const t = 0.3, y0 = u.y, y1 = u.y + APT.h;
+    box(u.x0 - t, y0 - t, u.z0 - t, u.x1 + t, y0, u.z1 + t, 0x8d6e63);            // wooden floor
+    box(u.x0 - t, y1, u.z0 - t, u.x1 + t, y1 + t, u.z1 + t, 0xf5f5f5);            // ceiling
+    box(u.x0 - t, y0, u.z0 - t, u.x1 + t, y1, u.z0, 0xffe0b2); box(u.x0 - t, y0, u.z1, u.x1 + t, y1, u.z1 + t, 0xffe0b2);
+    box(u.x0 - t, y0, u.z0, u.x0, y1, u.z1, 0xffccbc); box(u.x1, y0, u.z0, u.x1 + t, y1, u.z1, 0xffccbc);
+    box(u.x0 + 0.1, y0, u.z0 + 0.05, u.x1 - 0.1, y0 + 0.9, u.z0 + 0.6, 0x6d4c41);                      // trophy shelf (low cabinet)
+    box(u.x0 + 0.5, y0, u.z0 + 1.2, u.x0 + 2.7, y0 + 0.55, u.z0 + 3.3, 0x5c6bc0);                      // bed
+    box(u.x0 + 0.5, y0 + 0.55, u.z0 + 1.2, u.x0 + 2.7, y0 + 0.75, u.z0 + 1.55, 0xffffff);               // pillow
+    box(u.x1 - 1.0, y0, u.z0 + 2.4, u.x1 - 0.2, y0 + 0.85, u.z0 + 5.6, 0xef5350);                      // couch
+    box(u.x1 - 0.25, y0 + 0.85, u.z0 + 2.4, u.x1 - 0.05, y0 + 1.3, u.z0 + 5.6, 0xc62828);
+    box(u.x0 + 0.05, y0 + 0.8, u.z0 + 4.3, u.x0 + 0.15, y0 + 2.1, u.z0 + 6.6, 0x212121);              // TV on the wall
+    box(u.x0 + 3.6, y0, u.z0 + 3.2, u.x0 + 6.4, y0 + 0.02, u.z0 + 5.6, 0xffd23f, false);              // rug
+  }
   const trafficLoops = [];
   const rect = (x0, z0, x1, z1, cw) => {
     let c = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
@@ -933,5 +970,5 @@ export function buildMap() {
   const donutDoor = dn ? [dn.keeper[0], 0.15, dn.keeper[2] + 12.2] : [0, 0, 0]; // just outside the donut shop's front door
   const prison = buildPrison();
   return { boxes, ladders, windows, props, pickups, spawns, labels, shops, trafficLoops, policeLot, copSpawns, policeExit, donutDoor, holding, prison, worldHalf: WORLD_HALF, blockStarts: BLOCK_STARTS, block: BLOCK,
-           buildings, openings, trafficLights, stopSigns, furniture, districts: BLOCK_DISTRICT, bank, jobBoard };
+           buildings, openings, trafficLights, stopSigns, furniture, districts: BLOCK_DISTRICT, bank, jobBoard, carLot, carShow, threads, mannequins, aptDoor, apts: APT_UNITS };
 }

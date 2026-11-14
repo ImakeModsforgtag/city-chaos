@@ -4,11 +4,12 @@ import { newProfile, cleanProfile, SAVE_EVERY } from '../public/shared/profile.j
 import { XP, XP_REASON, levelFromXp, levelCash, unlocksAt, lockCos } from '../public/shared/levels.js';
 import { HATS, GLASSES, BACKS, HEADS, BODIES } from '../public/shared/constants.js';
 
-import { missionsFor, dayKey, ALL_DONE_BONUS, TOWER_TOP, secondsToReset } from '../public/shared/missions.js';
+import { missionsFor, dayKey, ALL_DONE_BONUS, TOWER_TOP, secondsToReset, weekKey, weekliesFor, secondsToWeekReset, WEEKLY_BONUS } from '../public/shared/missions.js';
 
 const COS_NAMES = { hat: HATS, glasses: GLASSES, back: BACKS, head: HEADS, body: BODIES };
 // stats that also give XP
-const MISSION_EV = new Set(['kills', 'headshots', 'crooks', 'cars', 'matches', 'wins']);
+const MISSION_EV = new Set(['kills', 'headshots', 'crooks', 'cars', 'matches', 'wins', 'raceWins', 'heists']);
+const EV_ALIAS = { raceWins: 'raceWin', heists: 'heist' };
 const STAT_XP = { kills: 'kill', headshots: 'headshot', arrests: 'arrest', robs: 'rob', crooks: 'crook', cars: 'car', matches: 'match', wins: 'win' };
 
 const DEV_SECRET = 'city-chaos-dev-secret-change-me';
@@ -38,13 +39,23 @@ export class Saves {
   attach(p, token) {
     const { prof, loaded, bad } = loadProfile(token);
     p.prof = prof; p.cash = prof.cash; p.lastCash = prof.cash; p.saveDirty = true; p.lastSaveAt = -99;
-    p.lvl = levelFromXp(prof.xp); p.minAcc = 0;
+    p.lvl = levelFromXp(prof.xp); p.minAcc = 0; p.gang = prof.gang || 0;
     p.cos = lockCos(p.cos, p.lvl);   // cosmetics you haven't unlocked yet show as the default
+    if (p.cos.outfit && !(prof.wardrobe || []).includes(p.cos.outfit)) p.cos.outfit = 0;   // outfits you haven't bought
     p.noSave = false; p.profLoaded = loaded; p.profBad = bad;
   }
   hello(p) {
     const interest = this.room.bank ? this.room.bank.accrue(p) : 0;   // savings interest since last time
     this.room.sendTo(p, this.missionsMsg(p));
+    if (this.room.missionsOn) this.room.sendTo(p, this.weeklyMsg(p));
+    if (this.room.garage) this.room.garage.send(p);
+    this.room.sendTo(p, { type: 'wardrobe', owned: p.prof.wardrobe || [] });
+    if (this.room.season) this.room.season.send(p);
+    if (this.room.clockMsg) this.room.sendTo(p, this.room.clockMsg());
+    if (this.room.apts) { this.room.sendTo(p, this.room.apts.msg()); this.room.sendTo(p, { type: 'aptOwn', own: p.prof.apt ? 1 : 0 }); }
+    if (this.room.races) this.room.sendTo(p, this.room.races.stateMsg());
+    if (this.room.turf) this.room.sendTo(p, this.room.turf.stateMsg());
+    if (this.room.npcs && this.room.npcs.crooks && this.room.npcs.crooks.crew()) this.room.sendTo(p, this.room.npcs.crooks.bossMsg());
     this.room.sendTo(p, { type: 'profile', loaded: p.profLoaded ? 1 : 0, reset: p.profBad ? 1 : 0, cash: p.cash, stats: p.prof.stats, xp: p.prof.xp, lvl: p.lvl, bank: p.prof.bank, interest, tut: p.prof.tut });
     this.save(p, true);
   }
@@ -53,7 +64,7 @@ export class Saves {
     p.prof.stats[k] = (p.prof.stats[k] || 0) + n; p.saveDirty = true;
     const x = xpKey || STAT_XP[k];
     if (x) this.addXP(p, XP[x] * n, x);
-    if (MISSION_EV.has(k)) this.event(p, k, n);
+    if (MISSION_EV.has(k)) this.event(p, EV_ALIAS[k] || k, n);
   }
 
   // the tutorial: finishing it the first time pays $100 + 50 XP (skipping just marks it seen)
@@ -75,9 +86,41 @@ export class Saves {
     return { type: 'missions', day: d.day, list: list.map((m, i) => ({ id: m.id, text: m.text, goal: m.goal, prog: Math.min(m.goal, d.prog[i]), done: d.done[i], cash: m.cash, xp: m.xp })),
              bonus: d.bonus, bonusCash: ALL_DONE_BONUS.cash, bonusXp: ALL_DONE_BONUS.xp, resetIn: secondsToReset(), ...extra };
   }
+  // ---------------------------------------------------------------- weekly challenges
+  weekly(p) {
+    const wk = weekKey(), w = p.prof.weekly || (p.prof.weekly = { wk: '', prog: [0, 0, 0, 0], done: [0, 0, 0, 0], bonus: 0 });
+    if (w.wk !== wk) { w.wk = wk; w.prog = [0, 0, 0, 0]; w.done = [0, 0, 0, 0]; w.bonus = 0; p.saveDirty = true; }
+    return { w, list: weekliesFor(wk) };
+  }
+  weeklyMsg(p, extra = {}) {
+    const { w, list } = this.weekly(p);
+    return { type: 'weekly', wk: w.wk, list: list.map((m, i) => ({ id: m.id, text: m.text, goal: m.goal, prog: Math.min(m.goal, w.prog[i]), done: w.done[i], cash: m.cash, xp: m.xp })),
+             bonus: w.bonus, bonusCash: WEEKLY_BONUS.cash, bonusXp: WEEKLY_BONUS.xp, resetIn: secondsToWeekReset(), ...extra };
+  }
+  weeklyEvent(p, ev, n) {
+    const { w, list } = this.weekly(p);
+    let changed = false, finished = null; const xpGain = [];
+    list.forEach((m, i) => {
+      if (m.ev !== ev || w.done[i]) return;
+      w.prog[i] = Math.min(m.goal, w.prog[i] + n); changed = true;
+      if (w.prog[i] >= m.goal) { w.done[i] = 1; (finished ||= []).push(i); p.cash = (p.cash || 0) + m.cash; p.lastCash = (p.lastCash || 0) + m.cash; xpGain.push([m.xp, 'weekly']); }
+    });
+    if (!changed) return;
+    p.saveDirty = true;
+    let bonus = 0;
+    if (!w.bonus && w.done.every(Boolean)) {
+      w.bonus = 1; bonus = 1; p.cash += WEEKLY_BONUS.cash; p.lastCash += WEEKLY_BONUS.cash; xpGain.push([WEEKLY_BONUS.xp, 'weeklies']);
+      p.prof.stats.weeklies = (p.prof.stats.weeklies || 0) + 1;
+      this.room.broadcast({ type: 'feed', text: `⭐ ${p.name} finished ALL the weekly challenges!` });
+    }
+    this.room.sendTo(p, this.weeklyMsg(p, finished ? { just: finished, allDone: bonus, cash: p.cash } : {}));
+    for (const [x, k] of xpGain) this.addXP(p, x, k);
+    if (finished) this.room.broadcast({ type: 'playerUpdate', p: this.room.publicPlayer(p) });
+  }
   // something happened that a mission might count (kills, shop, food, spend, earn, minutes, tower, ...)
   event(p, ev, n = 1) {
     if (!p || !p.prof || n <= 0 || !this.room.missionsOn) return;
+    this.weeklyEvent(p, ev, n);
     const { d, list } = this.daily(p);
     let changed = false, finished = null, xpGain = [];
     list.forEach((m, i) => {
@@ -88,6 +131,7 @@ export class Saves {
         finished.push(i);
         p.cash = (p.cash || 0) + m.cash; p.lastCash = (p.lastCash || 0) + m.cash;   // reward cash doesn't count as "earned" for missions
         xpGain.push([m.xp, 'mission']);
+        this.weeklyEvent(p, 'mission', 1);   // daily missions count toward a weekly challenge
       }
     });
     if (!changed) return;
@@ -140,6 +184,7 @@ export class Saves {
     p.prof.updated = Date.now();
     p.saveDirty = false; p.lastSaveAt = t;
     this.room.sendTo(p, { type: 'save', token: signProfile(p.prof) });
+    if (this.room.server && this.room.server.board) this.room.server.board.update(p.prof, p.name);
   }
   tick(dt) {
     for (const p of this.room.players.values()) {

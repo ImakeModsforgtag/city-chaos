@@ -41,6 +41,10 @@
           <button class="b-blue" data-goto="profile">📊 MY PROGRESS</button>
           <button class="b-yellow" data-goto="howto">❓ HOW TO PLAY</button>
         </div>
+        <div class="row">
+          <button class="b-purple" data-goto="party">🎉 PARTY <small id="party-badge"></small></button>
+          <button class="b-orange" data-goto="leaders">🏆 LEADERBOARDS</button>
+        </div>
       </div>
       <p id="wallet-line" class="netstatus"></p>
       <p id="net-status" class="netstatus">Connecting...</p>
@@ -60,6 +64,35 @@
         <button class="big b-green" data-goto="main">◀ BACK</button>
         <button class="b-gray" data-action="resetProgress">🗑 START OVER</button>
       </div>
+    </div>
+
+    <div id="screen-leaders" class="screen panel hidden">
+      <h2>🏆 LEADERBOARDS</h2>
+      <div id="lb-tabs" class="lb-tabs"></div>
+      <h3 id="lb-title"></h3>
+      <ol id="lb-list" class="lb-list"></ol>
+      <p id="lb-me" class="small"></p>
+      <p class="small" style="opacity:.7">Built from everyone's saved progress on this server. Your numbers update every time the game saves.</p>
+      <div class="btns"><button class="b-gray" data-goto="back">◀ BACK</button></div>
+    </div>
+
+    <div id="screen-party" class="screen panel hidden">
+      <h2>🎉 PARTY</h2>
+      <p>Make a party with your friends: whenever the party leader joins or creates a room, everyone in the party goes there too.</p>
+      <div id="party-none">
+        <div class="btns"><button class="big b-green" data-action="partyCreate">➕ MAKE A PARTY</button></div>
+        <p>or type a friend's 5-letter party code:</p>
+        <input id="party-code" class="code-input" maxlength="5" placeholder="ABCDE" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+        <div class="btns"><button class="big b-blue" data-action="partyJoin">JOIN PARTY</button></div>
+      </div>
+      <div id="party-in" class="hidden">
+        <div class="party-code">PARTY CODE <b id="party-code-show"></b></div>
+        <ul id="party-list"></ul>
+        <p id="party-tip" class="small"></p>
+        <div class="btns row"><button class="b-blue" data-action="partyCopy">📋 COPY INVITE LINK</button><button class="b-gray" data-action="partyLeave">🚪 LEAVE PARTY</button></div>
+      </div>
+      <p id="party-error" class="error"></p>
+      <div class="btns"><button class="b-gray" data-goto="back">◀ BACK</button></div>
     </div>
 
     <div id="screen-join" class="screen panel hidden">
@@ -143,6 +176,7 @@
           <div class="cycler" data-key="hat"><span>Hat</span><button>◀</button><b></b><button>▶</button></div>
           <div class="cycler" data-key="glasses"><span>Glasses</span><button>◀</button><b></b><button>▶</button></div>
           <div class="cycler" data-key="back"><span>Back</span><button>◀</button><b></b><button>▶</button></div>
+          <div class="cycler" data-key="outfit"><span>Outfit</span><button>◀</button><b></b><button>▶</button></div>
         </div>
       </div>
       <div class="btns row"><button class="b-gray" data-action="randomize">🎲 RANDOM</button><button class="big b-green" data-goto="back">✔ DONE</button></div>
@@ -180,7 +214,7 @@
             <li><b>Climb:</b> slap walls and pull yourself up. Push off walls to wall-jump onto rooftops.</li>
             <li><b>Grip (either hand):</b> grab a weapon or pickup near your hand.</li>
             <li><b>Right trigger:</b> shoot. <b>A:</b> reload. <b>B:</b> switch weapon.</li>
-            <li><b>X:</b> jump boost. <b>Y:</b> menu (daily missions, skip tutorial, 🐞 report a bug). <b>Left stick click:</b> scoreboard.</li>
+            <li><b>X:</b> jump boost. <b>Y:</b> menu (daily missions, emotes, call your car, skip tutorial, 🐞 report a bug). Raise your hand and wave to wave 👋. <b>📱 Phone:</b> roll your left wrist toward your face (like checking a watch), tap the apps with your right hand (🗺️ MAP shows the whole city). <b>Left stick click:</b> scoreboard.</li>
             <li><b>Right stick:</b> turn. <b>Left stick:</b> walk (if enabled in Settings).</li>
           </ul>
         </div>
@@ -193,7 +227,19 @@
             <li><b>1 2 3 / wheel / Q</b> switch weapon</li>
             <li><b>Tab</b> scoreboard + daily missions, <b>Esc</b> pause menu (🐞 report a bug there)</li>
             <li><b>K</b> skip the tutorial</li>
+            <li><b>C</b> call your own car (buy one at the 🚗 CAR LOT at the gas station)</li>
+            <li><b>G</b> (hold) emote wheel: wave, dance, laugh, chest beat...</li>
+            <li><b>N</b> (in a car) change the 📻 radio station</li>
+            <li><b>P</b> 📱 phone: cash, missions, GPS to any place, call your car</li>
+            <li><b>M</b> 🗺️ city map: click anywhere to set your GPS (minimap in the corner)</li>
+            <li><b>🏴 Gangs:</b> pick one in the pause menu, then stand in a turf ring to take it over</li>
             <li>Walk into a <b>ladder</b> to climb it.</li>
+          </ul>
+          <h3>🌗 A living city</h3>
+          <ul>
+            <li>Day turns to night every 24 minutes: streetlights, neon and headlights come on, and <b>more robbers</b> come out at night.</li>
+            <li><b>Rain</b> makes the roads slippery, storms bring thunder and lightning.</li>
+            <li>Pedestrians <b>wave back</b> and <b>dance with you</b> when you emote, <b>cheer at races</b> and jump out of the way of fast cars.</li>
           </ul>
           <h3>👮 Cop or 🧑 Civilian</h3>
           <ul>
@@ -233,6 +279,7 @@
     <div id="xppop"></div>
     <div id="missions" class="hidden"></div>
     <div id="jobline" class="hidden"></div>
+    <div id="bossbar" class="hidden"></div>
     <div id="tutorial" class="hidden"></div>
     <div id="levelup" class="hidden"></div>
     <div id="healthbox"><div class="hlabel">❤</div><div class="hbar"><div id="hfill"></div></div><div id="htext">100</div><div id="armorbox"></div><div id="boostbox"></div></div>
@@ -254,11 +301,14 @@
       <h2>PAUSED</h2>
       <div class="small">ROOM <b id="pause-code"></b></div>
       <div class="rolepick"><span>I want to be a</span><div class="seg role-seg"><button data-val="civilian">🧑 CIVILIAN</button><button data-val="cop">👮 COP</button></div></div>
+      <div class="rolepick"><span>My gang</span><div class="seg gang-seg"><button data-val="0">NONE</button><button data-val="1">🔴</button><button data-val="2">🔵</button><button data-val="3">🟢</button><button data-val="4">🟡</button></div></div>
       <div class="btns">
         <button class="big b-green" data-action="resume">▶ RESUME</button>
         <button class="b-blue" data-action="copy">📋 COPY INVITE LINK</button>
         <button class="b-purple" data-action="pause-settings">⚙ SETTINGS</button>
         <button class="b-pink" data-action="pause-custom">🎨 CUSTOMIZE</button>
+        <button class="b-purple" data-action="pause-party">🎉 PARTY</button>
+        <button class="b-orange" data-action="pause-leaders">🏆 LEADERBOARDS</button>
         <button class="b-yellow" data-action="bug">🐞 REPORT A BUG</button>
         <button class="b-gray" data-action="leave">🚪 LEAVE ROOM</button>
       </div>

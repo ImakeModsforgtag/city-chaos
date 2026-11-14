@@ -6,6 +6,7 @@ import { SHOP_ITEMS, shopItem, SHOP_RANGE, MAX_ARMOR, ARMOR_SOAK } from '../publ
 import { WEAPONS } from '../public/shared/weapons.js';
 import { MAX_HEALTH } from '../public/shared/constants.js';
 import { NPC_TYPE, NPC_STATE } from './npcs.js';
+import { OUTFITS, wardrobeItems } from '../public/shared/wardrobe.js';
 
 const HEAD_H = 1.55;
 const BUY_COOLDOWN = 0.35;   // seconds between purchases (stops double clicks buying twice)
@@ -13,11 +14,49 @@ const BUY_COOLDOWN = 0.35;   // seconds between purchases (stops double clicks b
 export function onShopBuy(room, p, m) {
   const shop = String(m.shop || ''), id = String(m.item || '');
   const fail = (why) => room.sendTo(p, { type: 'shopResult', ok: 0, shop, item: id, why });
-  const it = shopItem(shop, id);
-  if (!it) return fail('That isn\'t sold here');
   if (!p.alive || !p.pose || p.jail || p.holding || p.inCar) return fail('You can\'t shop right now');
   const t = room.now();
   if (t - (p.lastBuyAt || -9) < BUY_COOLDOWN) return;
+  // the 🚗 CAR LOT kiosk (gas station): its menu depends on the cars you own
+  if (shop === 'CAR LOT') {
+    const cl = room.npcs.map.carLot, h = p.pose.h;
+    if (!cl || Math.hypot(h[0] - cl[0], h[2] - cl[2]) > SHOP_RANGE + 0.6) return fail('Walk up to the CAR LOT kiosk');
+    p.lastBuyAt = t;
+    const r = room.garage.use(p, id);
+    if (!r.ok) return fail(r.why);
+    room.garage.send(p);
+    return room.sendTo(p, { type: 'shopResult', ...r, ok: 1, shop, item: id, kind: 'car', cash: p.cash });
+  }
+  // 🏠 APARTMENTS (the elevator door on PINK PALMS)
+  if (shop === 'APARTMENTS') {
+    const k = room.npcs.map.aptDoor.keeper, h = p.pose.h;
+    if (Math.hypot(h[0] - k[0], h[2] - k[2]) > SHOP_RANGE + 0.6) return fail('Walk up to the APARTMENTS door');
+    p.lastBuyAt = t;
+    const r = room.apts.use(p, id);
+    if (!r.ok) return fail(r.why);
+    return room.sendTo(p, { type: 'shopResult', ...r, ok: 1, shop, item: id, kind: 'apt', cash: p.cash });
+  }
+  // 👕 THREADS (clothing kiosk on the plaza)
+  if (shop === 'THREADS') {
+    const k = room.npcs.map.threads, h = p.pose.h;
+    if (!k || Math.hypot(h[0] - k[0], h[2] - k[2]) > SHOP_RANGE + 0.6) return fail('Walk up to the THREADS counter');
+    p.lastBuyAt = t;
+    const owned = p.prof.wardrobe || (p.prof.wardrobe = []);
+    const ci = wardrobeItems(owned, p.cos.outfit | 0).find(i => i.id === id);
+    if (!ci) return fail('That isn\'t sold here');
+    if (ci.kind === 'outfit') {
+      if ((p.cash || 0) < ci.price) return fail(`You need $${ci.price} (you have $${p.cash || 0})`);
+      p.cash -= ci.price; owned.push(ci.outfit); owned.sort((a, b) => a - b); p.saveDirty = true;
+      const S = room.saves; if (S) { S.event(p, 'shop'); S.event(p, 'spend', ci.price); }
+    }
+    p.cos = { ...p.cos, outfit: ci.outfit };   // buying (or picking) an outfit puts it on
+    if (room.saves) room.saves.save(p, true);
+    room.broadcast({ type: 'playerUpdate', p: room.publicPlayer(p) });
+    room.sendTo(p, { type: 'wardrobe', owned: p.prof.wardrobe });
+    return room.sendTo(p, { type: 'shopResult', ok: 1, shop, item: id, kind: ci.kind, outfit: ci.outfit, cash: p.cash });
+  }
+  const it = shopItem(shop, id);
+  if (!it) return fail('That isn\'t sold here');
   // the 💼 JOBS kiosk (no clerk)
   if (shop === 'JOB BOARD') {
     const jb = room.npcs.map.jobBoard, h = p.pose.h;

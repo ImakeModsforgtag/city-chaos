@@ -6,11 +6,11 @@ export const MAX_LEVEL = 50;
 // XP for each action
 export const XP = {
   kill: 25, headshot: 10, arrest: 60, rob: 40, crook: 50, crookArrest: 70,
-  car: 5, match: 30, win: 70, minute: 4, shop: 2, job: 40, heist: 150
+  car: 5, match: 30, win: 70, minute: 4, shop: 2, job: 40, heist: 150, race: 60, raceWin: 60, turf: 40, boss: 150
 };
 export const XP_REASON = {
   kill: 'Takedown', headshot: 'Headshot', arrest: 'Arrest', rob: 'Store robbed', crook: 'Robber stopped', crookArrest: 'Robber arrested',
-  car: 'Car hijacked', match: 'Match played', win: 'Match won', minute: 'Playing', shop: 'Shopping', mission: 'Mission complete', missions: 'All daily missions', job: 'Job done', heist: 'Bank heist', tutorial: 'Tutorial done'
+  car: 'Car hijacked', match: 'Match played', win: 'Match won', minute: 'Playing', shop: 'Shopping', mission: 'Mission complete', missions: 'All daily missions', job: 'Job done', heist: 'Bank heist', tutorial: 'Tutorial done', race: 'Race finished', raceWin: 'Race won', turf: 'Turf taken', boss: 'Boss taken down', weekly: 'Weekly challenge', weeklies: 'All weekly challenges', gift: '🎁 Gift'
 };
 
 // total XP needed to REACH a level (level 1 = 0 XP). Level 2 = 100, 3 = 210, 5 = 500, 10 = 2,100, 20 = about 11,000, 50 = about 82,600

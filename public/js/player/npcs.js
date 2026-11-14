@@ -8,7 +8,7 @@ import { HEAD_RADIUS, BODY_TOP, BODY_BOTTOM, BODY_RADIUS } from '/shared/constan
 import * as audio from '../audio/audio.js';
 
 export const NPC_TYPE = { PED: 0, SHOP: 1, COP: 2, GUARD: 3, PRISONER: 4, SWAT: 5, CROOK: 6 };
-export const NPC_STATE = { WALK: 0, PANIC: 1, HANDSUP: 2, DEAD: 3, AIM: 4, IDLE: 5 };
+export const NPC_STATE = { WALK: 0, PANIC: 1, HANDSUP: 2, DEAD: 3, AIM: 4, IDLE: 5, CHEER: 6, DANCE: 7, WAVE: 8 };
 export const NPC_NAMES = ['Pedestrian', 'Shopkeeper', 'Cop', 'Prison guard', 'Prisoner', 'SWAT', 'Robber'];
 const HEAD_H = 1.55, DELAY = 0.16;
 const SKIN = [0xffdbac, 0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0x5c3a21];
@@ -25,6 +25,18 @@ const legGeo = new THREE.CylinderGeometry(0.075, 0.07, 0.62, 7).translate(0, -0.
 const handGeo = new THREE.SphereGeometry(0.065, 8, 6);
 const handMats = SKIN.map(c => new THREE.MeshLambertMaterial({ color: c, flatShading: true }));
 const pantsMats = {};
+
+// ☂️ umbrellas for pedestrians when it rains
+const UMB_COLORS = [0xd62f4b, 0x1f3a93, 0xffd23f, 0x2ec27e, 0x8338ec, 0x222222];
+let umbGeo = null;
+function umbrellaMesh(id) {
+  if (!umbGeo) umbGeo = { top: new THREE.ConeGeometry(0.55, 0.22, 8, 1, true).translate(0, 0.11, 0), stick: new THREE.CylinderGeometry(0.012, 0.012, 0.62, 5).translate(0, -0.2, 0) };
+  const g = new THREE.Group();
+  const top = new THREE.Mesh(umbGeo.top, new THREE.MeshLambertMaterial({ color: UMB_COLORS[id % UMB_COLORS.length], side: THREE.DoubleSide, flatShading: true }));
+  const stick = new THREE.Mesh(umbGeo.stick, MAT.lambert({ color: 0x333333 }));
+  g.add(top, stick); g.position.set(-0.22, 2.02, -0.12); g.visible = false;
+  return g;
+}
 
 // a glazed donut with pink frosting and sprinkles (donut-shop cops carry one)
 let donutGeo = null;
@@ -165,6 +177,19 @@ export class NPCs {
       let n = this.map.get(id);
       if (!n) {
         n = this.build(id, type === NPC_TYPE.COP && (flags & 2) ? NPC_TYPE.SWAT : type); n.type = type; this.map.set(id, n);
+        if (type === NPC_TYPE.CROOK && (flags & (128 | 256))) {
+          // the BOSS CREW: bigger, armored, the boss wears a gold crown
+          const boss = !!(flags & 128);
+          n.root.scale.setScalar(boss ? 1.2 : 1.08);
+          const vest = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.42, 0.32), new THREE.MeshLambertMaterial({ color: 0x2d3436 })); vest.position.set(0, 1.18, 0); n.root.add(vest);
+          if (boss) {
+            const crown = new THREE.Group(), gm = new THREE.MeshLambertMaterial({ color: 0xffd23f, emissive: 0x553d00 });
+            const band = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.09, 10, 1, true), gm); crown.add(band);
+            for (let i = 0; i < 5; i++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.12, 4), gm); const a = i / 5 * Math.PI * 2; sp.position.set(Math.sin(a) * 0.16, 0.1, Math.cos(a) * 0.16); crown.add(sp); }
+            crown.position.set(0, 1.86, 0); n.root.add(crown);
+            this.setBubble(n, '👑 BOSS', '#b8860b'); n.bubbleUntil = 0;
+          }
+        }
         if (type === NPC_TYPE.COP && (flags & 1)) { n.donut = donutMesh(); n.lh.add(n.donut); n.donut.position.set(0, 0.02, -0.04); this.setBubble(n, '🍩 HEY! STOP!', '#ff7eb6'); n.bubbleUntil = performance.now() + 2500; }
       }
       if (n.bubbleUntil && performance.now() > n.bubbleUntil) { n.bubbleUntil = 0; this.setBubble(n, null); }
@@ -220,8 +245,13 @@ export class NPCs {
       n.root.visible = n.alive && state !== NPC_STATE.DEAD && dist < this.cull && !(n.flags & 32);   // 32 = robber driving a stolen car (drawn in the car)
       if (n.bag) n.bag.visible = !!(n.flags & 64);
       if (n.type === NPC_TYPE.COP && state !== NPC_STATE.DEAD && dist < nearestCop) { nearestCop = dist; copPos = { x, y: y + 2, z }; }
+      if (n.umb) n.umb.visible = false;
       if (!n.root.visible) continue;
       n.root.position.set(x, y, z); n.root.rotation.y = yaw;
+      if (state === NPC_STATE.DANCE) n.root.rotation.y = yaw + Math.sin(n.phase * 0.9) * 0.9;
+      const umbrella = this.rain > 0.3 && n.type === NPC_TYPE.PED && n.id % 3 !== 0 && (state === NPC_STATE.WALK || state === NPC_STATE.IDLE);
+      if (umbrella && !n.umb) { n.umb = umbrellaMesh(n.id); n.root.add(n.umb); }
+      if (n.umb) n.umb.visible = umbrella;
       // animation
       const speed = moved / Math.max(dt, 1e-3);
       n.phase += dt * (2 + speed * 2.2);
@@ -229,7 +259,18 @@ export class NPCs {
       n.legs[0].rotation.x = swing; n.legs[1].rotation.x = -swing;
       n.body.position.y = Math.abs(Math.sin(n.phase)) * Math.min(0.05, speed * 0.015);
       const L = n.lh.position, R = n.rh.position;
-      if (state === NPC_STATE.HANDSUP) { L.set(-0.28, 1.95 + Math.sin(n.phase * 3) * 0.03, -0.05); R.set(0.28, 1.95 + Math.cos(n.phase * 3) * 0.03, -0.05); }
+      const tt = performance.now() / 1000 + n.id;
+      if (state === NPC_STATE.CHEER) {   // arms up, jumping
+        const j = Math.abs(Math.sin(tt * 7)); n.body.position.y = j * 0.12; n.legs[0].rotation.x = n.legs[1].rotation.x = 0;
+        L.set(-0.3, 1.9 + j * 0.15 + Math.sin(tt * 9) * 0.05, -0.05); R.set(0.3, 1.9 + j * 0.15 + Math.cos(tt * 9) * 0.05, -0.05);
+      } else if (state === NPC_STATE.DANCE) {   // bob, sway and pump the arms
+        const b = Math.sin(tt * 8); n.body.position.y = Math.abs(b) * 0.07; n.legs[0].rotation.x = b * 0.35; n.legs[1].rotation.x = -b * 0.35;
+        L.set(-0.34, 1.3 + Math.sin(tt * 8) * 0.3, -0.2); R.set(0.34, 1.3 - Math.sin(tt * 8) * 0.3, -0.2);
+      } else if (state === NPC_STATE.WAVE) {   // one hand up waving
+        n.legs[0].rotation.x = n.legs[1].rotation.x = 0;
+        L.set(-0.32, 0.92, 0); R.set(0.3 + Math.sin(tt * 10) * 0.12, 1.85, -0.08);
+      } else if (umbrella) { L.set(-0.22, 1.42, -0.12); R.set(0.32, 0.92, swing * 0.25); }
+      else if (state === NPC_STATE.HANDSUP) { L.set(-0.28, 1.95 + Math.sin(n.phase * 3) * 0.03, -0.05); R.set(0.28, 1.95 + Math.cos(n.phase * 3) * 0.03, -0.05); }
       else if (state === NPC_STATE.PANIC) { L.set(-0.3, 1.75 + Math.sin(n.phase * 2) * 0.15, -0.1); R.set(0.3, 1.75 + Math.cos(n.phase * 2) * 0.15, -0.1); }
       else if (n.flags & 16) { L.set(-0.18, 1.12 + Math.sin(n.phase * 4) * 0.04, -0.5); R.set(0.18, 1.12 + Math.cos(n.phase * 4) * 0.04, -0.5); } // cuffing someone
       else if (state === NPC_STATE.AIM) { R.set(0.12, 1.33, -0.48); L.set(0.0, 1.3, -0.4); n.rh.rotation.set(0, 0, 0); }
@@ -237,7 +278,7 @@ export class NPCs {
       else { L.set(-0.32, 0.92, -swing * 0.25); R.set(0.32, 0.92, swing * 0.25); if (n.gun) n.rh.rotation.set(0.9, 0, 0); }
       if (state !== NPC_STATE.AIM && n.gun && (n.type === NPC_TYPE.COP || n.type === NPC_TYPE.CROOK) && state !== NPC_STATE.WALK) n.rh.rotation.set(0.9, 0, 0);
       if (n.gun && n.type === NPC_TYPE.CROOK) n.gun.visible = state !== NPC_STATE.HANDSUP;
-      if (n.bubble) n.bubble.position.y = 2.15 + Math.sin(n.phase) * 0.02;
+      if (n.bubble) n.bubble.position.y = (umbrella ? 2.45 : 2.15) + Math.sin(n.phase) * 0.02;
     }
     // police siren from the closest cop
     this.sirenT -= dt;

@@ -265,3 +265,78 @@ body.scoped #crosshair { display: none; }
 #tutorial b { display: block; font-size: 14px; letter-spacing: 2px; color: #ffd23f; }
 #tutorial span { display: block; font-size: 20px; font-weight: 800; margin: 4px 0; }
 #tutorial small { opacity: .8; font-size: 12px; }
+
+/* ---------- boss crew health bar */
+#bossbar { position: absolute; top: 118px; left: 50%; transform: translateX(-50%); width: min(460px, 86vw); background: #1d1442e6; border: 3px solid #ffd23f; border-radius: 14px; padding: 6px 12px; color: #fff; font-weight: 800; font-size: 14px; text-align: center; pointer-events: none; }
+#bossbar.hidden { display: none; }
+#bossbar .bb { height: 10px; border-radius: 6px; background: #3a2f6b; margin-top: 4px; overflow: hidden; }
+#bossbar .bb i { display: block; height: 100%; background: linear-gradient(90deg, #ff3b4e, #ffd23f); }
+
+/* ---------- party */
+.party-code { font-size: 18px; text-align: center; margin: 6px 0 10px; }
+.party-code b { font-size: 32px; letter-spacing: 6px; color: #ffd23f; display: block; }
+#party-list { list-style: none; padding: 0; margin: 0 auto 8px; max-width: 360px; }
+#party-list li { background: #1d144214; border-radius: 10px; padding: 6px 12px; margin: 4px 0; display: flex; justify-content: space-between; }
+#party-list li.off { opacity: .5; }
+#party-badge { color: #ffd23f; }
+
+/* ---------- emote wheel (hold G) */
+#emotewheel { position: fixed; left: 50%; top: 50%; width: 380px; height: 380px; transform: translate(-50%, -50%); border-radius: 50%; background: #1d1442cc; border: 4px solid #ffd23f; pointer-events: none; z-index: 30; }
+#emotewheel.hidden { display: none; }
+#emotewheel .ew { position: absolute; transform: translate(-50%, -50%); width: 84px; text-align: center; color: #fff; padding: 4px; border-radius: 14px; }
+#emotewheel .ew b { display: block; font-size: 34px; }
+#emotewheel .ew small { font-size: 11px; font-weight: 800; }
+#emotewheel .ew.on { background: #ffd23f; color: #1d1442; transform: translate(-50%, -50%) scale(1.15); }
+#emotewheel .ewc { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; color: #ffd23f; font-weight: 900; font-size: 16px; }
+#emotewheel .ewc small { color: #fff; font-weight: 600; font-size: 10px; }
+/* weekly challenges (gold) */
+h4.wk { color: #ffd23f; margin-top: 10px; }
+.ms.wk .bar div { background: linear-gradient(90deg, #ffb703, #ffd23f); }
+#scoreboard.shift { left: calc(50% + 170px); }
+@media (max-width: 900px) { #scoreboard.shift { left: auto; right: 8px; transform: translate(0, -50%); min-width: 0; } }
+
+/* ---------- leaderboards */
+.lb-tabs { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 8px; }
+.lb-tabs button { font-size: 13px; padding: 6px 10px; border-radius: 10px; background: #e8e4f5; color: #1d1442; border: 2px solid #1d1442; }
+.lb-tabs button.on { background: #ffd23f; }
+.lb-list { max-width: 420px; margin: 0 auto; padding-left: 0; list-style: none; counter-reset: lb; }
+.lb-list li { display: flex; justify-content: space-between; padding: 6px 12px; margin: 3px 0; border-radius: 10px; background: #1d144212; counter-increment: lb; font-weight: 700; }
+.lb-list li::before { content: '#' counter(lb); width: 34px; color: #8338ec; }
+.lb-list li span { flex: 1; }
+.lb-list li.me { background: #ffd23f88; }
+.lb-list li:nth-child(1)::before { content: '🥇'; } .lb-list li:nth-child(2)::before { content: '🥈'; } .lb-list li:nth-child(3)::before { content: '🥉'; }
+#screen-leaders h3 { text-align: center; margin: 4px 0; }
+/* ---------- 📱 phone (P) */
+#phone { position: fixed; right: 24px; bottom: 24px; width: 330px; max-height: calc(100vh - 48px); overflow: auto; background: #2a1f5f; border: 6px solid #1d1442; border-radius: 34px; padding: 12px 14px 10px; color: #fff; z-index: 40; box-shadow: 0 10px 30px #0008; font-weight: 700; }
+#phone.hidden { display: none; }
+#phone .ph-top { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #c9c3ff; }
+#phone .ph-top button { background: none; border: 0; color: #fff; font-size: 16px; cursor: pointer; }
+#phone .ph-money { display: flex; justify-content: space-between; margin: 8px 0 4px; }
+#phone .ph-money small { display: block; font-size: 10px; color: #c9c3ff; }
+#phone .ph-money b { font-size: 20px; color: #5dff9b; }
+#phone .ph-money div:nth-child(2) b { color: #7cc4ff; } #phone .ph-money div:nth-child(3) b { color: #ffd23f; }
+#phone .ph-xp { height: 8px; background: #0006; border-radius: 6px; overflow: hidden; } #phone .ph-xp i { display: block; height: 100%; background: #ffd23f; }
+#phone .ph-task { background: #00b4d8; border-radius: 12px; padding: 6px 10px; margin: 8px 0; font-size: 13px; }
+#phone h5 { margin: 10px 0 4px; color: #ffd23f; font-size: 13px; }
+#phone .ph-m { display: flex; justify-content: space-between; font-size: 12px; margin: 3px 0; gap: 8px; } #phone .ph-m.done { color: #5dff9b; }
+#phone .ph-apps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+#phone .ph-apps button, #phone .ph-gps button { background: #ff4fa3; color: #fff; border: 3px solid #1d1442; border-radius: 16px; padding: 8px 4px; font-size: 22px; cursor: pointer; font-weight: 800; }
+#phone .ph-apps button small { display: block; font-size: 11px; }
+#phone .ph-apps button.off { background: #4a4560; } #phone button.on { background: #8338ec !important; }
+#phone .ph-gps { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; } #phone .ph-gps button { font-size: 11px; padding: 4px 8px; background: #3d3a6b; border-radius: 10px; }
+#phone .ph-hint { display: block; text-align: center; margin-top: 8px; color: #c9c3ff; font-size: 11px; }
+
+/* 🗺️ minimap (bottom right, above the weapon slots) + the big city map (M) */
+#minimap { position: absolute; right: 20px; bottom: 196px; width: 170px; height: 170px; border-radius: 50%; border: 4px solid #1d1442; box-shadow: 0 0 0 2px #ffd23f88, 0 6px 18px #0007; pointer-events: none; }
+#minimap.hidden { display: none !important; }
+#citymap { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 45; background: #2a1f5f; border: 6px solid #1d1442; border-radius: 26px; padding: 10px 12px; color: #fff; font-weight: 700; box-shadow: 0 12px 40px #000a; }
+#citymap.hidden { display: none; }
+#citymap canvas { display: block; width: min(78vh, 86vw); height: min(78vh, 86vw); border-radius: 16px; cursor: crosshair; background: #2b2f3a; }
+#citymap .cm-top, #citymap .cm-bar { display: flex; align-items: center; gap: 12px; padding: 4px 4px 8px; font-size: 14px; }
+#citymap .cm-bar { padding: 8px 4px 2px; }
+#citymap .cm-top b { font-size: 20px; color: #ffd23f; }
+#citymap .cm-top span { flex: 1; color: #c9c3ff; font-size: 13px; }
+#citymap .cm-legend { flex: 1; font-size: 13px; color: #c9c3ff; }
+#citymap .cm-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin: 0 4px 0 10px; border: 2px solid #1d1442; vertical-align: -1px; }
+#citymap button { background: #ff4fa3; color: #fff; border: 3px solid #1d1442; border-radius: 12px; padding: 5px 12px; font: 800 14px Trebuchet MS, sans-serif; cursor: pointer; }
+#citymap button[data-x] { background: #1d1442; }

@@ -6,7 +6,9 @@ import { HEAD_RADIUS, BODY_TOP, BODY_BOTTOM, BODY_RADIUS } from '../public/share
 import { Crooks } from './crooks.js';
 
 export const NPC_TYPE = { PED: 0, SHOP: 1, COP: 2, CROOK: 6 };   // 3-5 are prison guards / inmates / SWAT (client)
-export const NPC_STATE = { WALK: 0, PANIC: 1, HANDSUP: 2, DEAD: 3, AIM: 4, IDLE: 5 };
+export const NPC_STATE = { WALK: 0, PANIC: 1, HANDSUP: 2, DEAD: 3, AIM: 4, IDLE: 5, CHEER: 6, DANCE: 7, WAVE: 8 };
+const REACT_STATES = new Set([6, 7, 8]);
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const HEAD_H = 1.55;            // head height above the NPC's feet (same hitbox as players)
 const PED_COUNT = 18;
 const MAX_COPS = 8;
@@ -188,6 +190,12 @@ export class NPCManager {
 
   panic(n, fromX, fromZ) {
     if (n.type !== NPC_TYPE.PED || n.state === NPC_STATE.DEAD || n.runner || n.fare) return;
+    n.react = null;
+    if (n.spectator) {   // race fans scatter when the shooting starts
+      if (fromX === undefined) { fromX = n.x + 1; fromZ = n.z; }
+      Object.assign(n, { runner: true, spectator: false, fromX, fromZ, runUntil: this.room.now() + 6, speed: 4.2, state: NPC_STATE.PANIC, panicUntil: Infinity });
+      return;
+    }
     if (n.state !== NPC_STATE.PANIC && fromX !== undefined) {
       // run away from the noise along the loop
       const [ax, az] = n.loop.pts[n.seg], [bx, bz] = n.loop.pts[(n.seg + 1) % 4];
@@ -410,6 +418,15 @@ export class NPCManager {
   }
 
   updatePed(n, dt, t) {
+    if (n.react) {   // cheering, dancing or waving back at a player
+      if (t < n.react.until && n.state !== NPC_STATE.PANIC) { n.state = n.react.state; if (n.react.yaw !== undefined) n.yaw = n.react.yaw; return; }
+      n.react = null; if (REACT_STATES.has(n.state)) n.state = n.spectator || n.fare ? NPC_STATE.IDLE : NPC_STATE.WALK;
+    }
+    if (n.dodge) {   // jumping out of the way of a speeding car
+      if (t < n.dodge.until) { this.walk(n, n.dodge.x, n.dodge.z, 5.5 * dt); return; }
+      n.dodge = null;
+    }
+    if (n.spectator) { if (t > n.spectator) { n.remove = true; return; } n.state = NPC_STATE.IDLE; return; }
     if (n.fare || (!n.loop && !n.runner)) { n.state = NPC_STATE.IDLE; return; }   // a taxi passenger waiting at the curb
     if (n.runner) {
       if (t > n.runUntil) { n.remove = true; return; }
@@ -432,6 +449,92 @@ export class NPCManager {
     n.y = n.loop.y;
   }
 
+  // ---------------------------------------------------------------- 🙌 pedestrians reacting to the city
+  react(n, state, secs, faceX, faceZ) {
+    if (n.type !== NPC_TYPE.PED || n.state === NPC_STATE.DEAD || n.state === NPC_STATE.PANIC || n.runner || n.dodge) return false;
+    const yaw = faceX === undefined ? undefined : Math.atan2(-(faceX - n.x), -(faceZ - n.z));
+    n.react = { state, until: this.room.now() + secs, yaw }; n.state = state; if (yaw !== undefined) n.yaw = yaw;
+    return true;
+  }
+  say(n, text) { this.room.broadcast({ type: 'npcSay', id: n.id, text }); }
+
+  // a crowd of race fans gathers at the start line while a race is on
+  addSpectators(x, z, count = 6, secs = 120) {
+    const until = this.room.now() + secs;
+    const have = this.list.filter(n => n.spectator);
+    if (have.length) { for (const n of have) n.spectator = until; return have; }
+    const spots = [];
+    for (const loop of this.loops) for (let i = 0; i < 4; i++) {
+      const [ax, az] = loop.pts[i], [bx, bz] = loop.pts[(i + 1) % 4];
+      const ex = bx - ax, ez = bz - az, L2 = ex * ex + ez * ez || 1;
+      const k = Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / L2));
+      const px = ax + ex * k, pz = az + ez * k, d = Math.hypot(px - x, pz - z);
+      if (d < 24) spots.push({ px, pz, ex, ez, L: Math.sqrt(L2), d, y: loop.y });
+    }
+    spots.sort((a, b) => a.d - b.d);
+    const out = [];
+    for (let i = 0; i < count && spots.length; i++) {
+      const s = spots[i % Math.min(spots.length, 3)], off = (Math.floor(i / Math.min(spots.length, 3)) - 1) * 1.6 + (Math.random() - 0.5) * 0.6;
+      const sx = s.px + s.ex / s.L * off, sz = s.pz + s.ez / s.L * off;
+      out.push(this.add({ type: NPC_TYPE.PED, spectator: until, x: sx, y: s.y, z: sz, yaw: Math.atan2(-(x - sx), -(z - sz)), hp: 40, maxHp: 40,
+                          state: NPC_STATE.IDLE, panicUntil: 0, speed: 1.2, respawnAt: 0 }));
+    }
+    return out;
+  }
+  clearSpectators(later = 6) { const t = this.room.now(); for (const n of this.list) if (n.spectator) n.spectator = Math.min(n.spectator, t + later); }
+
+  // everyone close enough to see it cheers (race start, a racer crossing the line)
+  cheer(x, z, radius = 40, secs = 4, lines = ['WOOO!', 'GO GO GO!', '🔥🔥🔥', 'YEAAAH!']) {
+    let n0 = 0;
+    for (const n of this.list) {
+      if (n.type !== NPC_TYPE.PED || Math.hypot(n.x - x, n.z - z) > radius) continue;
+      if (this.react(n, NPC_STATE.CHEER, secs * (0.8 + Math.random() * 0.4), x, z)) { n0++; if (Math.random() < 0.45) this.say(n, pick(lines)); }
+    }
+    return n0;
+  }
+
+  // a player emoted: pedestrians nearby answer it
+  emote(p, e) {
+    if (!p || !p.alive || p.inCar || !p.pose) return 0;
+    const [px, hy, pz] = p.pose.h, py = hy - 1.6;
+    const near = this.list.filter(n => n.type === NPC_TYPE.PED && n.state !== NPC_STATE.DEAD && !n.runner && Math.hypot(n.x - px, n.z - pz) < 9 && Math.abs((n.y || 0) - py) < 2.5)
+                          .sort((a, b) => Math.hypot(a.x - px, a.z - pz) - Math.hypot(b.x - px, b.z - pz)).slice(0, 4);
+    const R = {   // emote index -> [state, seconds, lines]
+      0: [NPC_STATE.WAVE, 2.6, ['Hey!', 'Hi there!', '👋']],            1: [NPC_STATE.CHEER, 2.2, ['HAHA', 'lol 😂', 'Good one!']],
+      2: [NPC_STATE.DANCE, 5, ['💃 Ayyy!', 'Let\'s go!', '🎶']],        3: [NPC_STATE.WAVE, 2.2, ['👍', 'Nice!']],
+      4: [null, 0, ['Whoa, chill!', 'Yikes...', '😬']],                 5: [NPC_STATE.WAVE, 2.4, ['❤️', 'Aww!']],
+      6: [NPC_STATE.CHEER, 2.6, ['🦍 OOH OOH!', 'BEAST!']],             7: [NPC_STATE.WAVE, 2.2, ['GG!', '🤝']]
+    }[e];
+    if (!R) return 0;
+    let n0 = 0;
+    for (const n of near) {
+      if (n.state === NPC_STATE.PANIC || n.dodge) continue;
+      if (R[0] === null) { if (Math.random() < 0.7) { this.say(n, pick(R[2])); n0++; } continue; }
+      if (this.react(n, R[0], R[1] * (0.9 + Math.random() * 0.3), px, pz)) { n0++; if (Math.random() < 0.5) this.say(n, pick(R[2])); }
+    }
+    return n0;
+  }
+
+  // pedestrians jump out of the way of fast cars heading at them
+  dodgeCars(t) {
+    const cars = (this.room.vehicles && this.room.vehicles.cars) || [];
+    const fast = cars.filter(c => Math.abs(c.speed) > 8);
+    if (!fast.length) return;
+    for (const n of this.list) {
+      if (n.type !== NPC_TYPE.PED || n.state === NPC_STATE.DEAD || n.fare || n.prison || n.dodge || (n.dodgeAt && t - n.dodgeAt < 2.5)) continue;
+      for (const c of fast) {
+        const sg = c.speed >= 0 ? 1 : -1, fx = -Math.sin(c.yaw) * sg, fz = -Math.cos(c.yaw) * sg;
+        const dx = n.x - c.x, dz = n.z - c.z, ah = dx * fx + dz * fz, side = dx * -fz + dz * fx;
+        if (ah < 0.5 || ah > Math.min(14, Math.abs(c.speed) * 0.9) || Math.abs(side) > 2.4 || Math.abs((n.y || 0) - (c.y || 0)) > 2) continue;
+        const s = side >= 0 ? 1 : -1;   // leap to whichever side is closer
+        n.react = null; n.dodge = { x: -fz * s, z: fx * s, until: t + 0.55 }; n.dodgeAt = t;
+        if (!n.runner && !n.spectator && !n.fare) { n.state = NPC_STATE.PANIC; n.panicUntil = t + 2.5; }
+        if (Math.random() < 0.5) this.say(n, pick(['WHOA!', 'HEY! WATCH IT!', 'Learn to drive!', 'AAAH!']));
+        break;
+      }
+    }
+  }
+
   updateShop(n, dt, t) {
     if (n.rob && t - n.rob.last > 1.5) { n.rob = null; }
     if (n.rob && n.rob.crook) return;
@@ -445,7 +548,7 @@ export class NPCManager {
       if (n.state === NPC_STATE.DEAD) {
         if (t >= n.respawnAt) {
           if (n.type === NPC_TYPE.SHOP) { Object.assign(n, { x: n.home[0], y: n.home[1], z: n.home[2], hp: n.maxHp, state: NPC_STATE.IDLE, rob: null }); }
-          else if (n.type === NPC_TYPE.PED && (n.runner || n.fare)) { n.remove = true; continue; }
+          else if (n.type === NPC_TYPE.PED && (n.runner || n.fare || n.spectator)) { n.remove = true; continue; }
           else if (n.type === NPC_TYPE.CROOK) { n.remove = true; continue; }
           else if (n.type === NPC_TYPE.PED) { const f = this.newPed(); Object.assign(n, f, { id: n.id, hist: [] }); }
           this.room.broadcast({ type: 'npcSpawn', id: n.id });
@@ -460,6 +563,7 @@ export class NPCManager {
       if (n.hist.length > 12) n.hist.shift();
     }
     this.list = this.list.filter(n => !n.remove);
+    if (t - (this.dodgeT || 0) > 0.1) { this.dodgeT = t; this.dodgeCars(t); }
     this.crooks.tick(dt, t);
     // wanted level decays when no cop can see you
     for (const p of this.room.players.values()) {
@@ -481,7 +585,7 @@ export class NPCManager {
     const t = this.room.now();
     for (const n of this.list) {
       const closed = n.type === NPC_TYPE.SHOP && t < n.closedUntil ? 1 : 0;
-      const flags = (n.donut ? 1 : 0) | (n.swat ? 2 : 0) | (n.mode === 'chase' ? 4 : 0) | (n.tower ? 8 : 0) | (n.arrest ? 16 : 0) | (n.car ? 32 : 0) | (n.loot ? 64 : 0);
+      const flags = (n.donut ? 1 : 0) | (n.swat ? 2 : 0) | (n.mode === 'chase' ? 4 : 0) | (n.tower ? 8 : 0) | (n.arrest ? 16 : 0) | (n.car ? 32 : 0) | (n.loot ? 64 : 0) | (n.boss ? 128 : 0) | (n.guard ? 256 : 0);
       arr.push([n.id, n.type, r2(n.x), r2(n.y), r2(n.z), r2(n.yaw), n.state, closed, flags]);
     }
     return arr;

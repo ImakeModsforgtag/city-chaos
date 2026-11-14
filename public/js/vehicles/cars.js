@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { GeoBatch, trs, MAT } from '../engine/geo.js';
 import { npcBodyMesh } from '../player/npcs.js';
 import * as audio from '../audio/audio.js';
+import { decodeCar, carStats, PAINTS, GOLD } from '/shared/garage.js';
 
 export const DRIVER = { NPC: 0, PLAYER: 1, NONE: 2 };
 const COLORS = [0xff4d4d, 0x3a86ff, 0xffd23f, 0x2ec27e, 0x9b6bff, 0xf5f5f5, 0xff9f1c, 0x00c2c7];
@@ -19,6 +20,7 @@ function carGeometry(ci, open = false) {
   const key = ci + (open ? 'o' : '');
   if (geoCache[key]) return geoCache[key];
   if (ci === 10) return (geoCache[key] = vanGeometry(open));
+  if (ci >= 100) return (geoCache[key] = personalGeometry(ci, open));
   const police = ci === POLICE || ci === 9, suv = ci === 9;
   const c = suv ? 0x1d2340 : police ? 0xf4f6fb : COLORS[ci % COLORS.length], dark = 0x23233a, trim = 0xd9dde8, glass = 0x9be7ff;
   const b = new GeoBatch(), glow = new GeoBatch();
@@ -59,6 +61,69 @@ function carGeometry(ci, open = false) {
   glow.box(-0.9, 0.62, -2.16, -0.5, 0.82, -2.14, 0xfff6c0); glow.box(0.5, 0.62, -2.16, 0.9, 0.82, -2.14, 0xfff6c0);
   glow.box(-0.9, 0.62, 2.14, -0.55, 0.8, 2.16, 0xff3030); glow.box(0.55, 0.62, 2.14, 0.9, 0.8, 2.16, 0xff3030);
   return (geoCache[key] = { body: b.build(), glow: glow.build() });
+}
+// ---------------------------------------------------------------- your own cars (CAR LOT): 5 models x 10 paints
+function personalGeometry(code, open) {
+  const d = decodeCar(code), id = d ? d.model.id : 'compact';
+  const gold = id === 'gold';
+  const c = gold ? GOLD : PAINTS[d ? d.paint : 0].c, dark = 0x23233a, trim = gold ? 0xfff1a8 : 0xd9dde8, glass = 0x9be7ff;
+  const shade = new THREE.Color(c).multiplyScalar(0.8).getHex();
+  const b = new GeoBatch(), glow = new GeoBatch();
+  const S = { compact: { L: 1.85, W: 0.95, y1: 1.02, cab: [-0.9, 1.05], top: 1.72, wr: 0.36 },
+              pickup:  { L: 2.2, W: 1.02, y1: 1.12, cab: [-1.0, 0.2], top: 1.86, wr: 0.46 },
+              muscle:  { L: 2.2, W: 1.02, y1: 0.95, cab: [-0.55, 1.05], top: 1.5, wr: 0.42 },
+              sports:  { L: 2.15, W: 1.0, y1: 0.82, cab: [-0.5, 0.95], top: 1.36, wr: 0.38 },
+              gold:    { L: 2.15, W: 1.0, y1: 0.82, cab: [-0.5, 0.95], top: 1.36, wr: 0.38 } }[id];
+  const { L, W, y1, cab, top, wr } = S;
+  b.box(-W, 0.3, -L, W, y1, L, c);                                                  // body
+  if (id === 'sports' || id === 'gold') {
+    b.box(-W + 0.05, y1, -L, W - 0.05, y1 + 0.06, -0.9, shade);                     // low wedge hood
+    b.box(-W, y1 + 0.35, L - 0.35, W, y1 + 0.42, L - 0.05, dark);                   // rear spoiler
+    for (const sx of [-0.8, 0.8]) b.box(sx - 0.05, y1, L - 0.3, sx + 0.05, y1 + 0.36, L - 0.15, dark);
+    for (const sx of [-1, 1]) b.box(sx * W - 0.01, 0.42, -0.4, sx * W + 0.01, 0.62, 0.9, dark); // side intakes
+  }
+  if (id === 'muscle') {
+    b.box(-0.35, y1, -1.7, 0.35, y1 + 0.16, -0.9, dark);                            // hood scoop
+    for (const sx of [-0.22, 0.22]) b.box(sx - 0.1, y1 + 0.003, -L, sx + 0.1, y1 + 0.008, L, 0xf5f5f5); // racing stripes
+  }
+  if (id === 'pickup') {
+    for (const sx of [-1, 1]) b.box(sx * W - 0.06 * sx, y1, 0.3, sx * W, y1 + 0.42, L, shade); // cargo bed walls
+    b.box(-W, y1, L - 0.06, W, y1 + 0.42, L, shade);
+    b.box(-W + 0.06, y1 - 0.05, 0.3, W - 0.06, y1, L - 0.06, dark);                  // bed floor
+    b.box(-1.06, 0.28, -2.28, 1.06, 0.6, -2.1, 0x9e9e9e);                            // chrome bumper
+  }
+  if (!open) {
+    b.box(-W + 0.08, y1, cab[0], W - 0.08, top, cab[1], c);                           // cabin
+    b.box(-W + 0.05, top - 0.02, cab[0] + 0.05, W - 0.05, top + 0.05, cab[1] - 0.05, shade);
+    const gy = (y1 + top) / 2 + 0.04, gh = (top - y1) * 0.62, gl = cab[1] - cab[0] - 0.25;
+    b.quad(0, gy, cab[0] - 0.01, W * 1.6, gh, 'z', -1, glass); b.quad(0, gy, cab[1] + 0.01, W * 1.6, gh, 'z', 1, glass);
+    b.quad(-W + 0.07, gy, (cab[0] + cab[1]) / 2, gl, gh, 'x', -1, glass); b.quad(W - 0.07, gy, (cab[0] + cab[1]) / 2, gl, gh, 'x', 1, glass);
+  } else {
+    b.box(-0.95, 1.0, -0.95, 0.95, 1.18, -0.7, dark);
+    for (const sx of [-0.9, 0.86]) b.box(sx, 1.18, -0.93, sx + 0.04, 1.5, -0.89, dark);
+    b.geom(torus, trs(SEAT.x, 1.1, -0.42, -1.1, 0, 0), dark);
+    b.box(SEAT.x - 0.02, 0.95, -0.62, SEAT.x + 0.02, 1.08, -0.45, dark);
+    b.box(-0.85, 0.7, 0.35, 0.85, 1.25, 0.6, 0x5c5f73);
+  }
+  b.box(-W - 0.02, 0.28, -L - 0.07, W + 0.02, 0.52, -L + 0.1, id === 'pickup' ? 0x9e9e9e : dark);
+  b.box(-W - 0.02, 0.28, L - 0.1, W + 0.02, 0.52, L + 0.07, dark);
+  for (const sx of [-1, 1]) for (const sz of [-L * 0.64, L * 0.64]) {
+    const r = id === 'muscle' && sz > 0 ? wr + 0.04 : wr;
+    b.geom(cyl, trs(sx * (W - 0.02), r, sz, 0, 0, Math.PI / 2, r, id === 'muscle' && sz > 0 ? 0.38 : 0.3, r), 0x1b1b24);
+    b.geom(cyl, trs(sx * (W + 0.14), r, sz, 0, 0, Math.PI / 2, r * 0.5, 0.02, r * 0.5), trim);
+  }
+  const ly = Math.min(y1 - 0.12, 0.8);
+  glow.box(-W + 0.1, ly - 0.16, -L - 0.01, -W + 0.5, ly, -L + 0.01, 0xfff6c0); glow.box(W - 0.5, ly - 0.16, -L - 0.01, W - 0.1, ly, -L + 0.01, 0xfff6c0);
+  glow.box(-W + 0.1, ly - 0.16, L - 0.01, -W + 0.45, ly, L + 0.01, 0xff3030); glow.box(W - 0.45, ly - 0.16, L - 0.01, W - 0.1, ly, L + 0.01, 0xff3030);
+  if (gold) for (const sx of [-1, 1]) glow.box(sx * W - 0.012, 0.34, -L + 0.3, sx * W + 0.012, 0.38, L - 0.3, 0xffe066); // underglow strip
+  return { body: b.build(), glow: glow.build() };
+}
+// a show car for the CAR LOT pads (or the menu preview)
+export function showCar(code) {
+  const g = carGeometry(code);
+  const root = new THREE.Group();
+  const body = new THREE.Mesh(g.body, bodyMat); body.castShadow = true; root.add(body); root.add(new THREE.Mesh(g.glow, glowMat));
+  return root;
 }
 const bodyMat = MAT.lambert(), glowMat = MAT.basic();
 export const POLICE = 8;
@@ -130,13 +195,14 @@ export class Cars {
     if (!list) return;
     const seen = new Set();
     for (const a of list) {
-      const [id, x, y, z, yaw, speed, dk, pid, color, , siren, crook] = a;
+      const [id, x, y, z, yaw, speed, dk, pid, color, , siren, crook, owner] = a;
       seen.add(id);
       let c = this.map.get(id);
       if (!c) { c = this.build(id, color); this.map.set(id, c); c.x = x; c.y = y; c.z = z; c.yaw = yaw; }
       c.buf.push({ t: st, x, y, z, yaw, speed });
       if (c.buf.length > 20) c.buf.shift();
-      c.driverKind = dk; c.pid = pid;
+      c.driverKind = dk; c.pid = pid; c.owner = owner || 0;
+      if (color !== c.body.userData.color) this.recolor(id, color);
       if (!!crook !== !!c.crook) {   // a car thief behind the wheel (masked robber instead of the normal driver)
         c.crook = !!crook;
         const d = npcBodyMesh(c.crook ? 6000 + id : 1000 + id, c.crook ? 6 : 0);
@@ -149,6 +215,8 @@ export class Cars {
     for (const [id, c] of this.map) if (!seen.has(id) && id !== this.localId) { this.scene.remove(c.root); this.map.delete(id); }
   }
   clear() { for (const c of this.map.values()) this.scene.remove(c.root); this.map.clear(); }
+  // your car got a paint job (or you picked another of your cars)
+  recolor(id, color) { const c = this.map.get(id); if (!c) return; c.body.userData.color = color; c.body.geometry = carGeometry(color, c.open).body; c.root.children[1].geometry = carGeometry(color, c.open).glow; }
   get(id) { return this.map.get(id); }
 
   update(dt, serverNow, camPos, local, firstPerson = false) {
@@ -210,7 +278,7 @@ export class Driving {
   constructor(world, cars) { this.world = world; this.cars = cars; this.car = null; this.vy = 0; this.crashT = 0; }
   enter(arr) {
     const [id, x, y, z, yaw] = arr;
-    this.car = { id, x, y, z, yaw, speed: 0 };
+    this.car = { id, x, y, z, yaw, speed: 0, stats: carStats(arr[8] || 0) };
     this.vy = 0;
     audio.playDoor();
   }
@@ -228,13 +296,14 @@ export class Driving {
     const c = this.car; if (!c) return null;
     const ev = { crash: 0 };
     // engine + steering
-    const accel = input.throttle > 0 ? (c.speed < 0 ? 18 : 10) : input.throttle < 0 ? (c.speed > 0 ? -18 : -6) : 0;
+    const st = c.stats || carStats(0);
+    const accel = input.throttle > 0 ? (c.speed < 0 ? 18 : st.accel) : input.throttle < 0 ? (c.speed > 0 ? -18 : -6) : 0;
     c.speed += accel * Math.abs(input.throttle || 0) * dt * (accel ? 1 : 0);
     if (!input.throttle) c.speed *= Math.max(0, 1 - dt * 0.9);       // coast
     if (input.brake) c.speed *= Math.max(0, 1 - dt * 4);
-    c.speed = THREE.MathUtils.clamp(c.speed, -7, 26);
+    c.speed = THREE.MathUtils.clamp(c.speed, -7, st.top);
     const grip = c.speed / (Math.abs(c.speed) + 2.5);                  // no turning when stopped
-    c.yaw -= input.steer * 1.7 * grip * dt;
+    c.yaw -= input.steer * st.grip * grip * dt * (Driving.weatherGrip || 1);   // a little less grip in the rain
     // move with collision (try full move, then slide on each axis)
     const fx = -Math.sin(c.yaw), fz = -Math.cos(c.yaw);
     const dx = fx * c.speed * dt, dz = fz * c.speed * dt;

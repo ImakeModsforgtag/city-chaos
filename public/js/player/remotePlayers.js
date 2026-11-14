@@ -89,6 +89,7 @@ export class RemotePlayers {
       av.setWeapon(wi >= 0 ? WEAPON_IDS[wi] : null);
       av.setVR(!!b[25]);
       av.setPose(h, l, r, dt);
+      av.emoteTick();
       p.head = h;
     }
   }

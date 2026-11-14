@@ -8,6 +8,10 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import { Room, now } from './room.js';
+import { Parties } from './party.js';
+import { Leaderboard } from './leaderboard.js';
+import { loadProfile } from './profiles.js';
+import { tokenPid } from '../public/shared/profile.js';
 import { CODE_CHARS, MAX_PLAYERS, SNAPSHOT_RATE } from '../public/shared/constants.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,8 +37,10 @@ const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 32 * 1024 });
 const state = {
   rooms: new Map(),     // code -> Room
   tokens: new Map(),    // reconnect token -> { code, id }
+  board: new Leaderboard({ persist: process.env.CC_TEST !== '1' }),   // 🏆 leaderboards
 };
 app.get('/bugs', bugsPage);   // bug reports (needs ADMIN_KEY)
+app.get('/api/leaderboard', (req, res) => { res.setHeader('Cache-Control', 'no-cache'); const pid = String(req.query.pid || ''); res.json({ ...state.board.top(), me: pid ? state.board.rankOf(pid) : null }); });
 app.get('/health', (req, res) => res.json({ ok: true, rooms: state.rooms.size, uptime: Math.round(process.uptime()) }));
 // Optional: set ICE_SERVERS env var (JSON array) to add a TURN server for voice chat on strict networks
 app.get('/api/ice', (req, res) => {
@@ -48,6 +54,7 @@ app.get('/api/room/:code', (req, res) => {
   res.json({ ok: true, mode: r.mode, players: r.connectedCount, max: MAX_PLAYERS });
 });
 
+const parties = new Parties(state);   // groups of friends who follow the leader between rooms
 const clients = new Set();
 let nextId = 1;
 function makeCode() {
@@ -106,6 +113,8 @@ wss.on('connection', (ws, req) => {
     }
 
     if (!client.token) return; // must say hello first
+    if (msg.type === 'lbSubmit') { const r = loadProfile(msg.token); if (r.loaded && tokenPid(msg.token)) state.board.update(r.prof, String(msg.name || '').replace(/[<>]/g, '').slice(0, 16) || 'Player'); return; }
+    if (msg.type.startsWith('party')) { if (msg.type === 'partyCreate' || msg.type === 'partyJoin') { if (msg.name) client.info.name = String(msg.name); } return parties.handle(client, msg); }
 
     if (msg.type === 'create' || msg.type === 'join' || msg.type === 'quick') {
       let room;
@@ -126,6 +135,7 @@ wss.on('connection', (ws, req) => {
       const p = room.addPlayer(client, client.info);
       state.tokens.set(client.token, { code: room.code, id: p.id });
       console.log(`[room] ${room.code} +player ${p.id} (${p.name}) now ${room.connectedCount}`);
+      parties.entered(client, room);
       return;
     }
     if (msg.type === 'leave') return leave(client, true);
@@ -139,6 +149,7 @@ wss.on('connection', (ws, req) => {
 
   ws.on('close', () => {
     clients.delete(client);
+    parties.closed(client);
     const room = client.room;
     if (!room) return;
     const p = room.players.get(client.id);
@@ -154,6 +165,7 @@ function leave(client, explicit = false) {
   if (!room) return;
   room.removePlayer(client.id);
   client.room = null;
+  parties.left(client);
   if (explicit) client.send({ type: 'left' });
   // issue a fresh token so an old one can't rejoin the slot
   client.token = crypto.randomBytes(16).toString('hex');
@@ -175,6 +187,7 @@ setInterval(() => {
 setInterval(() => { for (const room of state.rooms.values()) { try { room.snapshot(); } catch (e) { console.error('[error] snapshot:', e); } } }, 1000 / SNAPSHOT_RATE);
 // last line of defense: log unexpected errors instead of letting the whole server stop
 process.on('uncaughtException', (e) => console.error('[error] uncaught:', e));
+process.on('SIGTERM', () => { try { state.board.flush(); } catch {} process.exit(0); });
 process.on('unhandledRejection', (e) => console.error('[error] unhandled rejection:', e));
 
 // heartbeat (drops dead sockets so reconnect grace starts) + flood counter reset
@@ -184,6 +197,6 @@ setInterval(() => {
     c.alive = false; try { c.ws.ping(); } catch {}
   }
 }, 10000);
-setInterval(() => { for (const c of clients) c.msgCount = 0; }, 1000);
+setInterval(() => { for (const c of clients) c.msgCount = 0; parties.tick(); }, 1000);
 
 server.listen(PORT, () => console.log(`CITY CHAOS server running on http://localhost:${PORT}`));
