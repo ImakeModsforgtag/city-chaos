@@ -139,6 +139,8 @@ Your **left wrist** shows health, timer and score. The **gun** shows its ammo.
 | Space | Jump · **walk into a wall and hold Space to climb it** (keep holding W and Space; at the top you pull yourself onto the roof or ledge. Let go to drop. Not in prison) |
 | 1 / 2 / 3, mouse wheel, Q | Switch weapon |
 | Tab | Scoreboard |
+| M | 🗺️ Big city map (click to set your GPS) |
+| P | 📱 Phone |
 | Esc | Pause menu |
 | Space / Enter | Skip the arrest cutscene |
 
@@ -343,6 +345,178 @@ Withdraw $100 / $500 / ALL.
 - New daily missions: **Finish N jobs** and **Put $N in the CITY BANK**. New stats on MY PROGRESS: jobs done, bank
   heists and interest earned. MY PROGRESS also shows your savings.
 
+## 8-octies. Your own cars (🚗 CAR LOT) and street races (🏁)
+
+**CAR LOT.** At the gas station there's a 🚗 CAR LOT kiosk with four show cars on glowing pads. Press E (VR: grip) at
+the kiosk to buy a car with your saved cash:
+
+| Car | Price | Unlocks at | Top speed |
+|---|---|---|---|
+| 🚗 Pocket Rocket | $1,000 | level 1 | 94 km/h |
+| 🛻 Big Rig Pickup | $2,500 | level 3 | 90 km/h |
+| 🏎 Thunder V8 | $4,500 | level 5 | 112 km/h |
+| 🏁 Viper GT | $8,000 | level 8 | 122 km/h |
+| 👑 Gold Rush | $20,000 | level 12 | 122 km/h (solid gold) |
+
+- Each car comes in a random color; a repaint costs $250 (10 colors). If you own several, pick which one you drive.
+- **Call your car anywhere:** press **C** on PC, or **Y menu > CALL MY CAR** in VR. It parks on the nearest street
+  and a pink beam shows where. Only one of your cars is out at a time; calling again moves it (15 s wait).
+- **Only you can drive your car.** Friends can hop in as passengers while you drive. Driving your own car never gives
+  wanted stars. Your car stays parked where you leave it, and goes away a minute after you leave the game.
+- Your cars are kept in your save.
+
+**Street races.** Drive any car (your own, a stolen one, even a police car) into the 🏁 STREET RACE arch on the avenue
+next to the gas station. A race opens for 15 seconds so friends can line up, then it starts. Follow the cyan beam to
+each checkpoint in order (skipping one doesn't count). The two routes take turns: **CITY LOOP** (9 checkpoints,
+target 0:40) and **GRAND TOUR** (14 checkpoints around the outer roads, target 1:30).
+- With friends: 1st wins $200 + $100 for every other racer, 2nd $100, 3rd $50. Solo: beat the target time for $150.
+- Every finish gives 60 XP (+60 for a win). Your best time on each route is saved. New daily mission: finish street races.
+- You drop out if you get out of your car for more than 8 seconds, get knocked out, or the race goes past 3:20.
+
+## 8-nonies. Gang turf (🏴)
+
+Pick a gang in the pause menu (or **Y menu > GANG** in VR): 🔴 RED FANGS, 🔵 BLUE SHARKS, 🟢 GREEN VIPERS or 🟡 GOLD CROWNS.
+Your gang is saved. Six turf zones are marked with a big ring and a flag: CHAOS PARK, THE COURTS, CONTAINER YARD,
+DINER STRIP, CONSTRUCTION SITE and MEGA MART LOT.
+- Stand in a ring (on foot) to take it over: 20 seconds alone, faster with more of your gang (up to 3x).
+  A rival gang member (or a cop) in the ring makes it **CONTESTED** and stops the clock. Walk away and the progress fades.
+- Taking a zone pays everyone who helped $60 + 40 XP. Owning turf pays every member of the gang $8 per zone every minute.
+- Cops standing in a gang's ring clear it back to neutral (+$30 each).
+- The flag and ring show the owner's color; the top of the screen shows the zone and progress while you're in it;
+  the Tab scoreboard shows how many zones each gang owns and everyone's gang. New daily mission: take over turf.
+
+## 8-decies. The BOSS CREW (👑)
+
+Every 8 to 12 minutes (the first one 4 to 6 minutes after someone joins), a **BOSS CREW** hits one of the stores:
+an armored boss with a gold crown (450 health) and two armored guards (180 each).
+- **Everyone** gets the alert (banner, alarm, a yellow beam on the boss, and a boss health bar at the top of the screen).
+- The boss holds up the store for 20 seconds while the guards watch the door. They shoot at anyone who comes within
+  about 18 m, and they don't panic or surrender like normal robbers. Then they run with $1,500 to $2,500.
+- Bounties: **$800** for the boss (plus all the loot) and 150 XP, $250 per guard, and **+$300** for whoever drops the last one.
+- Cops can only cuff a crew member once they're worn down below 30% health.
+
+## 8-undecies. 👕 THREADS clothing store
+
+On the east side of the downtown plaza (next to the JOBS kiosk) is **THREADS**, with three mannequins showing off
+outfits. Press E (VR: grip) at the counter. Outfits are bought with cash and kept forever in your save:
+🧥 Hoodie $150 · 🌺 Hawaiian Shirt $250 · 🏃 Track Suit $350 · 🤵 Tuxedo $700 · 🦸 Hero Suit (with cape) $1,200 · 💰 Gold Drip $3,000.
+Buying one puts it on. Switch between the ones you own at the counter or in CUSTOMIZE (new **Outfit** row; outfits you
+don't own show their price). Everyone sees your outfit; police, guard and prison uniforms go over it.
+
+## 8-duodecies. 🏠 Apartments
+
+There's a 🏠 APARTMENTS elevator door on the front of the PINK PALMS building. Press E (VR: grip) there.
+- **Buy an apartment for $5,000** (unlocks at level 4). It's yours forever (saved).
+- **GO HOME** takes you to your own private room: a trophy shelf, a bed, a couch, a TV and a "window" on the city.
+  - The **trophy shelf** shows what you've earned: a gold bar for each bank heist (up to 6), a race cup, a crown for
+    taking down a boss crew, a police badge for robbers stopped, your gang's flag if you've taken turf, toy versions of
+    the cars you own, and a plaque with your level, stats and best race times.
+  - **Nap** in your bed (E / grip next to it) for full health (every 20 seconds).
+  - It's a **safe zone**: nobody can hurt you inside. You can't go home while you have wanted stars.
+  - Walk to the 🚪 EXIT door and press E / grip to go back outside.
+- **Friends can visit** while you're home: at the APARTMENTS door they'll see "Visit <name>'s place". When you leave,
+  your guests go back outside too. Up to 6 people can be home at once.
+- (Technical: the rooms are sealed boxes under the city, so they never get in the way of anything above.)
+
+## 8-terdecies. 🎉 Parties
+
+On the main menu (or the pause menu) press **🎉 PARTY**:
+- **MAKE A PARTY** gives you a 5-letter party code (and a 📋 COPY INVITE LINK button: opening the link joins the party).
+- Friends type the code and press **JOIN PARTY**.
+- Whenever the **party leader** (👑) creates a room, joins a room or presses PLAY for a quick match, everyone in the
+  party is sent to the same room automatically. Joining a party while the leader is already in a room takes you there.
+- The party screen shows who's in the party and which room they're in. If the leader leaves, someone else becomes
+  leader. Reloading the page or a dropped connection keeps your spot for 90 seconds. Up to 8 people per party.
+- In VR the Y menu shows your party (click it to leave). Make or join the party on the menu screen before you enter VR.
+
+## 8-quattuordecies. 😀 Emotes
+
+- **PC:** hold **G** to open the emote wheel, move the mouse toward an emote (or press its number 1-8), let go of G.
+- **VR:** Y menu > **EMOTES**, or simply **raise your hand above your head and wave it side to side** for 👋.
+- Emotes: 👋 Wave, 😂 Laugh, 💃 Dance, 👍 Thumbs up, 😡 Angry, ❤️ Love, 🦍 Chest beat, 🤝 GG. Everyone nearby sees an
+  emoji bubble over your head and a little move (desktop players' avatars wave, dance, beat their chest...).
+
+## 8-quindecies. ⭐ Weekly challenges
+
+Every Monday at midnight (Pacific) everyone gets the same **4 weekly challenges**, bigger than the daily missions:
+things like "Take down 30 players", "Win 3 street races", "Get away with 2 CITY BANK heists", "Take down a BOSS CREW
+member", "Complete 9 daily missions" or "Take over 8 gang turf zones". Each one pays $100 to $1,000+ and XP.
+Finish all 4 for **+$1,000 + 500 XP** and a ⭐ star on your apartment's trophy shelf. They show under the daily
+missions when you hold Tab, on the pause screen, on MY PROGRESS and on the VR missions page. Progress is saved.
+
+## 8-sedecies. 🏆 Leaderboards
+
+**🏆 LEADERBOARDS** is on the main menu, the pause menu and the VR Y menu. Ten boards, top 10 each:
+💰 Richest (cash + savings) · ⭐ Highest level · 🏦 Bank heists · 🦹 Robbers stopped · 🏁 Street race wins ·
+⏱ Fastest CITY LOOP · ⏱ Fastest GRAND TOUR · 🏴 Turf taken · 👑 Bosses taken down · 💥 Takedowns.
+You're highlighted and the screen tells you your rank on each board.
+
+How it works without a database: every save now has a permanent player ID and is signed by the server (so nobody
+can fake their numbers). The board updates every time a game saves. When the game connects it sends its signed save,
+so after a server restart (or the free Render plan going to sleep) the boards fill back up as players come online.
+The server also writes the board to `data/leaderboard.json` (kept between restarts on hosts that have a disk;
+on Render's free plan it starts empty after a restart and refills as people play). Don't upload the `data` folder.
+
+## 8-septendecies. 🎄 Holiday event
+
+From **December 1 to January 5** (Pacific time) the city turns wintry by itself: falling snow, a grey winter sky,
+a giant decorated tree (blinking lights, gold star, presents) on the downtown plaza and snowmen around town.
+- **12 🎁 gifts** are hidden around the city every day (different spots each day, the same for everyone). Walk up and
+  press E (VR: grip). Each player can open each gift once a day: cash ($50 to $250), XP, or (5% chance) the
+  exclusive **🎅 Santa Suit** outfit, which you can't buy anywhere. Hold Tab to see how many you've found today.
+- To turn it on outside those dates (or off during them), set `SEASON=winter` (or `SEASON=off`) in Render's Environment.
+
+## 8-duodevicies. 🔊 Sound and the 📻 car radio
+
+All sounds are still made in the browser (no audio files to download), now with more detail:
+- **📻 Car radio** with three stations: **CHAOS FM** (upbeat pop), **LO-FI 88** (chill) and **BASS 101** (wobbly bass).
+  It turns on by itself in your own car. Press **N** on PC (VR: **X** on the left controller while driving) for the
+  next station; after the last one it turns off. It stops when you get out, and remembers your station.
+- **Gunshots** have a body thump and a mechanical click up close, a short "slap back" echo off the buildings, and far
+  away shots (and explosions) sound muffled, like real gunfire across a city.
+- **The city sounds like where you are:** lots of birds in the parks, traffic and honking downtown and in the
+  shopping streets, and during the holiday event a cold wind and the odd sleigh bell.
+
+## 8-undevicies. 📱 The phone
+
+- **PC:** press **P**. **VR:** roll your left wrist toward your face (like checking a watch) and the phone appears on
+  the inside of your wrist; tap an app by touching it with your right controller. It hides again when you look away.
+- It shows the time, your **cash and savings**, your **level and XP**, what you're doing right now (job, race,
+  heist, turf...), **today's missions**, how many **weekly challenges** you've done and the holiday gifts you've found.
+- Apps: **🚗 Call my car**, **📻 Radio** (in a car), **👋 Wave**, **🗺️ Map** (see below) and **📍 GPS**: pick a place (JOBS, CITY BANK, CAR LOT,
+  THREADS, APARTMENTS, RACE START, GUN SHOP, CHAOS TOWER) and a purple beam guides you there; it turns off when you arrive.
+  On PC the phone frees the mouse without pausing; P or Esc puts it away.
+
+## 8-vicies. 🌗 Day and night, 🌧 weather, living streets and the 🗺️ city map
+
+- **Day and night:** the city has its own clock, the same for everyone in the room. One full day takes **24 real
+  minutes** (a game hour is one real minute). The sun sets around 7 PM and rises around 6 AM. At night the
+  **streetlights** and **neon** glow, **windows light up**, the stars come out and cars drive with their **headlights** on.
+  The phone shows the game time (☀️ / 🌙). **More NPC robbers come out at night** (they show up faster and one extra can be
+  around at once), so nights are busier for cops.
+- **Weather:** every few game hours the sky changes between **clear**, **🌧 rain** and **⛈ thunderstorms**. Rain falls
+  around you, splashes on the street, greys out the sky and makes the roads **slippery** (cars grip about 20% less in
+  heavy rain, so brake earlier). Storms add **lightning flashes and thunder**. The holiday event keeps its snow instead.
+- **Pedestrians react to you:**
+  - They **run from gunfire** (as before) and scream.
+  - **Emote next to them** and they answer: **wave** and they wave back, **dance** and they dance with you, laugh and
+    they laugh, beat your chest and they cheer, get angry and they back off. Up to 4 people nearby answer.
+  - **Street races** draw a **crowd of fans** at the 🏁 start line. They **cheer on GO** and cheer again when a racer
+    crosses the line (louder for the winner). Shoot near them and they scatter.
+  - Drive fast at someone and they **jump out of the way** ("HEY! WATCH IT!").
+  - In the rain most pedestrians walk with an **umbrella** ☂️.
+- **🗺️ City map:**
+  - **PC minimap:** bottom right, it turns with you (the pink **N** shows north) and zooms out while you drive.
+    It shows you (yellow arrow), your target (job, race checkpoint, GPS, your called car) as a pin that sticks to the edge
+    when it's off the map, the places (jobs, bank, car lot, threads, apartments, race start, gun shop, chaos tower),
+    gang turf rings in their gang's color, other players (white, **blue = cops**, **red = wanted**), the police chasing
+    you when you're wanted, and holiday gifts.
+  - **Big map:** press **M** (or open the phone and tap 🗺️ Map). **Click anywhere to drop a GPS pin** there (a purple beam
+    guides you), or click a place to go to it. Buttons: **Clear GPS** and **Minimap ON/OFF**. M or Esc closes it. The
+    game keeps running while it's open.
+  - **VR:** look at your wrist phone and tap **🗺️ MAP**: the screen turns into the whole city map with you and your target.
+    Tap **◀ BACK** to return to the apps.
+
 ## 8-septies. First-time tutorial and bug reports
 
 **Tutorial.** New players get a short 7-step tutorial the first time they're in the city (blue panel at the top on PC,
@@ -503,6 +677,7 @@ city-chaos/
 │   │   ├── collision.js    collision + raycasting (movement and bullet hits)
 │   │   ├── shops.js        what every store sells and the prices
 │   │   ├── weapons.js      weapon stats
+│   │   ├── daynight.js     the city clock + weather schedule (same on server and browser)
 │   │   └── constants.js    health, hitboxes, modes, cosmetics list
 │   ├── js/main.js          game flow + frame loop
 │   ├── js/engine/          3D engine: renderer + sky, city.js (per-block batches + LOD), cityDecor.js (facades, roads,
@@ -512,7 +687,8 @@ city-chaos/
 │   ├── js/weapons/         weapon models, firing/reload system, pickups
 │   ├── js/net/             networking (network.js) + voice chat (voice.js)
 │   ├── js/player/          avatars, other players (interpolation), NPC visuals
-│   ├── js/ui/              menus, HUD, settings, desktop input, store menus (shopMenu.js)
+│   ├── js/ui/              menus, HUD, settings, desktop input, store menus (shopMenu.js), phone.js, citymap.js (minimap + big map)
+│   ├── js/world/           daynight.js (sun, sky, lights), weather.js (rain, storms), races, turf, apartments, holiday event
 │   ├── js/prison/          prison visuals, arrest cutscene, prison interactions
 │   ├── js/audio/           synthesized sound effects + music
 │   └── vendor/three/       Three.js (bundled, no internet CDN needed)
@@ -526,6 +702,25 @@ city-chaos/
 ## 11. What was tested, and what still needs your real headset
 
 **Tested and passing:**
+- **Phone (`test/browser/phone_test.py`):** PC: P opens it with your money and missions, the GPS beam, Esc closes it without pausing. Emulated Quest 3: hidden during normal play, shown when you roll your wrist toward your face, tapping WAVE with the right hand sends a wave.
+- **Sound (`test/browser/sound_test.py`):** the radio starting in your own car, N going through all three stations and off, stopping when you get out; new gunshots near and far, explosions and the park / winter ambience with no errors.
+- **Living city (`test/server-test-27.mjs`, `test/browser/daynight_test.py`, `test/browser/citymap_test.py`):** the clock
+  (wraps after 24 minutes, day/night hours, the weather cycle), pinning the test clock, pedestrians dancing and waving back
+  and turning to face you, far away peds ignoring you, gunfire beating a dance, race fans gathering (once), cheering on GO,
+  settling down, scattering at gunshots and going home, dodging a fast car (and not a slow one). In the browser: noon,
+  sunset, night (lamps, windows, stars, headlights), rain and a storm; the minimap, the M map, clicking a GPS pin and a
+  place, the phone MAP app, the VR phone MAP page and BACK, a ped dancing back and umbrellas in the rain.
+- **Holiday event (`test/server-test-26.mjs`, `test/browser/season_test.py`):** the dates, 12 gifts a day in reachable spots (not the prison), different every day, opening one (cash, XP, the Santa Suit, $500 if you already have it), once per player per day, too far = no, the Santa Suit saved and wearable only by its owner, the odds. In the browser: snow, the grey sky, the tree, opening a gift, the Tab count and turning it off again.
+- **Leaderboards (`test/server-test-25.mjs`, `test/browser/leaderboard_test.py`):** sorting (fastest times low to high, zeros left off), one row per player, ranks, a real game save showing up on /api/leaderboard, a signed save sent on connect counting, a forged save ignored. In the browser: the screen from the pause menu, switching boards and your row highlighted.
+- **Weekly challenges (`test/server-test-24.mjs`, `test/browser/weekly_test.py`):** 4 a week, the same for everyone, changing weekly, every kind showing up, progress from real events (race wins, heists, daily missions...), rewards, the all-4 bonus and star, no double rewards, the new-week reset, saved. In the browser: Tab with both lists (the scoreboard moves aside) and the WEEKLY CHALLENGE banner.
+- **Emotes (`test/server-test-21.mjs`, `test/browser/emote_test.py`):** relayed to everyone, rate limited, junk ignored; in the browser the G wheel, picking with the mouse, the other player receiving it, and the emoji bubbles.
+- **Parties (`test/server-test-23.mjs`, `test/browser/party_test.py`):** making a party, wrong codes, joining by code, the leader creating a room pulling the party in, joining late, quick match together, only the leader pulls, a new leader, reconnecting. In the browser: the PARTY screen on two players and the friend following the leader into a new room.
+- **Apartments (`test/server-test-22.mjs`, `test/browser/apartment_test.py`):** level + cash to buy, no buying twice, no going home with stars, your own unit, the trophy shelf data for everyone, the safe zone, the nap and its wait, friends visiting, guests walked out when you leave, the unit freeing up, respawning out of it, no turf capturing from under the city, saved. In the browser: the door, buying, going home, the room and shelf, the nap and leaving through the exit door.
+- **THREADS (`test/server-test-21.mjs`, `test/browser/threads_test.py`):** buying with cash, wearing and taking off, no buying twice, outfits you don't own can't be worn (joining or CUSTOMIZE), saved and loaded. In the browser: the mannequins, the store menu, buying the Tuxedo, a second player seeing it, and the CUSTOMIZE row.
+- **Boss crew (`test/server-test-20.mjs`, `test/browser/boss_test.py`):** the boss + 2 guards, the alert to everyone, the walk in, the 20 s hold up, guards at the door, shooting anyone close, no cuffing at full health, bounties, the loot, the last-one bonus, the crew running together, escaping, the timer. In the browser: the banner, the health bar, the beam, the crowned boss and armored guards.
+- **Gang turf (`test/server-test-19.mjs`, `test/browser/turf_test.py`):** joining and leaving a gang (saved), no gang = no capturing, the 20 s capture, faster with two, contested zones, fading progress, taking a rival's zone, cops clearing turf (and not taking neutral zones), turf income only for gang members. In the browser: the pause menu picker, the rings and flags, the capture line, the TURF TAKEN banner and the scoreboard count.
+- **Your own cars (`test/server-test-17.mjs`, `test/browser/garage_test.py`):** buying (cash + level locks), no buying twice, repainting, picking a car, the save, calling your car to a street (cooldown, one car out at a time), only the owner can drive it, friends can ride, no carjacking stat or stars, it stays parked, it goes away after you leave and comes back with your save. In the browser: the show cars, the CAR LOT menu, buying, C to call, the beam, getting in and driving.
+- **Street races (`test/server-test-18.mjs`, `test/browser/race_test.py`):** you need a car to start, the lobby, a second racer joining, dropping out before the start, GO, checkpoints in order only, places and prizes, stats and best times saved, getting out of the car, timeouts, the solo target time (prize only when you beat it), the cooldown and the two routes taking turns. In the browser: a whole CITY LOOP from the start line to the finish banner.
 - **Tutorial + bug reports (`test/server-test-16.mjs`, `test/browser/tutorial_test.py`):** the reward paid once per save, nothing for skipping, no second reward after coming back with the same save; in the browser every one of the 7 steps on PC (including the beam to the kiosk), the COMPLETE banner and cash, skipping with K, not showing again on the next visit, the VR steps and SKIP TUTORIAL in the VR menu; a bug report from the pause menu reaching the server log, automatic error reports (script errors and failed promises) and the `/bugs` page (hidden without the key).
 - **Soak tests:** `test/soak-test.mjs` runs 8 bots doing random things for 20 to 40 simulated minutes on a fake clock and checks nothing breaks (cash never negative, no NaN positions, no stuck players, no crashes). `test/browser/browser_soak_test.py` runs 2 desktop players and an emulated Quest 3 in one room for 3 minutes of random keys, clicks, menus, teleports and shooting: zero page errors and zero server errors.
 - **CITY BANK + jobs (`test/server-test-15.mjs`, `test/browser/bank_jobs_test.py`, `test/browser/quest3_bank_jobs_test.py`):** deposits, withdrawals, not counted as earned/spent, saved, interest (2%/day, capped), only at the teller; knockouts taking 10% of pocket cash (max $300), arrests confiscating 25%, savings safe; the heist (cops can't drill, alarm + stars, drill cooling down, door opening and its collision going away, a separate door per room, grabbing one stack each, escaping 120 m to keep it, losing it when knocked out, the vault closing and the lockdown, new players getting the vault state); delivery jobs (on time, late = half pay, too late = cancelled, quit), taxi jobs (needs a car, real passenger NPC, stopping to pick up and drop off, out of the car too long = failed). In the browser on PC and an emulated Quest 3: the bank building, the teller and JOBS menus, a full delivery with the marker, and a full heist from drilling to getting away.
